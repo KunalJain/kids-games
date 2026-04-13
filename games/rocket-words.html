@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rocket Words</title>
+<link rel="stylesheet" href="../style.css">
+<style>
+  body{display:flex;flex-direction:column;align-items:center;}
+  #canvas{border-radius:14px;display:block;max-width:100%;cursor:pointer;}
+  #ui{display:flex;gap:16px;font-size:15px;font-weight:600;padding:0.5rem 0;align-items:center;flex-wrap:wrap;justify-content:center;}
+  #msg{font-size:14px;color:rgba(255,255,255,0.5);padding-bottom:0.5rem;}
+</style>
+</head>
+<body>
+<div class="game-header">
+  <a href="../index.html" class="back-btn">← Back</a>
+  <h1>🚀 Rocket Words</h1>
+</div>
+<div id="ui">
+  <span>⭐ Lvl <span id="lvlEl">1</span></span>
+  <span>🏆 Wins: <span id="winsEl">0</span>/3</span>
+  <span>💯 Score: <span id="scoreEl">0</span></span>
+</div>
+<canvas id="canvas" width="520" height="520"></canvas>
+<div id="msg">Guess the word — tap letters to reveal it and launch the rocket!</div>
+
+<script>
+const canvas=document.getElementById('canvas'),ctx=canvas.getContext('2d'),W=520,H=520;
+
+const WORDS=[
+  // Level 1: 3-4 letters
+  [{w:'CAT',e:'🐱',c:'Animal'},{w:'DOG',e:'🐶',c:'Animal'},{w:'BEE',e:'🐝',c:'Animal'},
+   {w:'OWL',e:'🦉',c:'Animal'},{w:'ANT',e:'🐜',c:'Animal'},{w:'COW',e:'🐄',c:'Animal'},
+   {w:'FOX',e:'🦊',c:'Animal'},{w:'PIG',e:'🐷',c:'Animal'},{w:'HEN',e:'🐔',c:'Animal'},
+   {w:'FISH',e:'🐟',c:'Animal'},{w:'FROG',e:'🐸',c:'Animal'},{w:'BIRD',e:'🐦',c:'Animal'},
+   {w:'DUCK',e:'🦆',c:'Animal'},{w:'BEAR',e:'🐻',c:'Animal'},{w:'LION',e:'🦁',c:'Animal'},
+   {w:'DEER',e:'🦌',c:'Animal'},{w:'WOLF',e:'🐺',c:'Animal'},{w:'CRAB',e:'🦀',c:'Animal'},
+   {w:'CAKE',e:'🎂',c:'Food'},{w:'MILK',e:'🥛',c:'Food'},{w:'CORN',e:'🌽',c:'Food'},
+   {w:'RICE',e:'🍚',c:'Food'},{w:'EGGS',e:'🥚',c:'Food'},{w:'TACO',e:'🌮',c:'Food'},
+   {w:'SUN',e:'☀️',c:'Nature'},{w:'MOON',e:'🌙',c:'Nature'},{w:'STAR',e:'⭐',c:'Nature'},
+   {w:'RAIN',e:'🌧️',c:'Nature'},{w:'SNOW',e:'❄️',c:'Nature'},{w:'TREE',e:'🌳',c:'Nature'},
+   {w:'BLUE',e:'💙',c:'Color'},{w:'PINK',e:'🩷',c:'Color'},{w:'GOLD',e:'🌟',c:'Color'}],
+  // Level 2: 4-5 letters
+  [{w:'TIGER',e:'🐯',c:'Animal'},{w:'HORSE',e:'🐴',c:'Animal'},{w:'SHARK',e:'🦈',c:'Animal'},
+   {w:'EAGLE',e:'🦅',c:'Animal'},{w:'SNAKE',e:'🐍',c:'Animal'},{w:'WHALE',e:'🐳',c:'Animal'},
+   {w:'ZEBRA',e:'🦓',c:'Animal'},{w:'KOALA',e:'🐨',c:'Animal'},{w:'PANDA',e:'🐼',c:'Animal'},
+   {w:'LLAMA',e:'🦙',c:'Animal'},{w:'CAMEL',e:'🐪',c:'Animal'},{w:'MOOSE',e:'🫎',c:'Animal'},
+   {w:'APPLE',e:'🍎',c:'Food'},{w:'GRAPE',e:'🍇',c:'Food'},{w:'LEMON',e:'🍋',c:'Food'},
+   {w:'PIZZA',e:'🍕',c:'Food'},{w:'BREAD',e:'🍞',c:'Food'},{w:'HONEY',e:'🍯',c:'Food'},
+   {w:'PEACH',e:'🍑',c:'Food'},{w:'PASTA',e:'🍝',c:'Food'},{w:'SALAD',e:'🥗',c:'Food'},
+   {w:'CLOUD',e:'☁️',c:'Nature'},{w:'OCEAN',e:'🌊',c:'Nature'},{w:'STORM',e:'⛈️',c:'Nature'},
+   {w:'GREEN',e:'💚',c:'Color'},{w:'BLACK',e:'🖤',c:'Color'},{w:'WHITE',e:'🤍',c:'Color'}],
+  // Level 3: 5-6 letters
+  [{w:'RABBIT',e:'🐰',c:'Animal'},{w:'TURTLE',e:'🐢',c:'Animal'},{w:'PARROT',e:'🦜',c:'Animal'},
+   {w:'SPIDER',e:'🕷️',c:'Animal'},{w:'MONKEY',e:'🐒',c:'Animal'},{w:'DONKEY',e:'🫏',c:'Animal'},
+   {w:'SALMON',e:'🐟',c:'Animal'},{w:'WALRUS',e:'🦭',c:'Animal'},{w:'JAGUAR',e:'🐆',c:'Animal'},
+   {w:'FLOWER',e:'🌸',c:'Nature'},{w:'FOREST',e:'🌲',c:'Nature'},{w:'DESERT',e:'🏜️',c:'Nature'},
+   {w:'ISLAND',e:'🏝️',c:'Nature'},{w:'SUNSET',e:'🌅',c:'Nature'},{w:'SPRING',e:'🌱',c:'Nature'},
+   {w:'YELLOW',e:'💛',c:'Color'},{w:'PURPLE',e:'💜',c:'Color'},{w:'ORANGE',e:'🟠',c:'Color'},
+   {w:'SILVER',e:'🩶',c:'Color'},{w:'CHERRY',e:'🍒',c:'Food'},{w:'BANANA',e:'🍌',c:'Food'},
+   {w:'COOKIE',e:'🍪',c:'Food'},{w:'WAFFLE',e:'🧇',c:'Food'},{w:'BUTTER',e:'🧈',c:'Food'}],
+  // Level 4: 6-8 letters
+  [{w:'PENGUIN',e:'🐧',c:'Animal'},{w:'DOLPHIN',e:'🐬',c:'Animal'},{w:'GIRAFFE',e:'🦒',c:'Animal'},
+   {w:'OCTOPUS',e:'🐙',c:'Animal'},{w:'GORILLA',e:'🦍',c:'Animal'},{w:'HAMSTER',e:'🐹',c:'Animal'},
+   {w:'PEACOCK',e:'🦚',c:'Animal'},{w:'LOBSTER',e:'🦞',c:'Animal'},{w:'CHEETAH',e:'🐆',c:'Animal'},
+   {w:'VOLCANO',e:'🌋',c:'Nature'},{w:'RAINBOW',e:'🌈',c:'Nature'},{w:'TORNADO',e:'🌪️',c:'Nature'},
+   {w:'CHICKEN',e:'🍗',c:'Food'},{w:'PANCAKE',e:'🥞',c:'Food'},{w:'AVOCADO',e:'🥑',c:'Food'},
+   {w:'PUMPKIN',e:'🎃',c:'Food'},{w:'POPCORN',e:'🍿',c:'Food'},{w:'SAUSAGE',e:'🌭',c:'Food'},
+   {w:'CRIMSON',e:'❤️',c:'Color'},{w:'MAGENTA',e:'💗',c:'Color'},{w:'SCARLET',e:'🔴',c:'Color'}]
+];
+
+const LEVELS=[
+  {label:'Short words',  winsNeeded:3, maxWrong:6},
+  {label:'Medium words', winsNeeded:3, maxWrong:6},
+  {label:'Long words',   winsNeeded:3, maxWrong:6},
+  {label:'Big words!',   winsNeeded:3, maxWrong:6},
+];
+
+const THEMES=[
+  {sky:'#06061e',stars:'rgba(255,255,255,0.7)',accent:'#ef5350',fuel:'#4CAF50',body:'#eceff1'},
+  {sky:'#0d1a08',stars:'rgba(255,255,255,0.6)',accent:'#FF9800',fuel:'#29b6f6',body:'#e3f2fd'},
+  {sky:'#12002e',stars:'rgba(255,255,255,0.7)',accent:'#CE93D8',fuel:'#FFD700',body:'#f3e5f5'},
+  {sky:'#1a0800',stars:'rgba(255,255,255,0.6)',accent:'#FFD700',fuel:'#ef5350',body:'#fff8e1'},
+];
+
+const PCOLS=['#FFD700','#FF6B6B','#4FC3F7','#A5D6A7','#CE93D8','#FFCC80'];
+
+// Letter grid: 3 rows
+const GRID_ROWS=['ABCDEFGHI','JKLMNOPQR','STUVWXYZ'];
+const BW=38,BH=32,BGAP=5,BSTEP=BW+BGAP;
+const GRID_ROW_Y=[350,390,430];
+
+const LRECTS={};
+GRID_ROWS.forEach((row,ri)=>{
+  const tw=row.length*BW+(row.length-1)*BGAP,sx=(W-tw)/2;
+  [...row].forEach((ch,ci)=>{LRECTS[ch]={x:sx+ci*BSTEP,y:GRID_ROW_Y[ri],w:BW,h:BH};});
+});
+
+const HINT_BTN={x:W/2-75,y:474,w:150,h:36};
+const ROCKET_CX=270, PAD_Y=305;
+
+let lvlIdx=0,score=0,wins=0,state='playing';
+let word='',emoji='',category='',revealed=[],guessed=new Set();
+let wrongGuesses=0,hints=2,particles=[];
+let liftY=0,rocketTilt=0,usedWords=new Set();
+
+function rnd(n){return Math.floor(Math.random()*n);}
+
+function getWord(li){
+  const list=WORDS[li];
+  const avail=list.filter(w=>!usedWords.has(w.w));
+  return avail.length>0?avail[rnd(avail.length)]:list[rnd(list.length)];
+}
+
+function startWord(li){
+  const wObj=getWord(li);usedWords.add(wObj.w);
+  word=wObj.w;emoji=wObj.e;category=wObj.c;
+  revealed=new Array(word.length).fill(false);
+  guessed=new Set();wrongGuesses=0;hints=2;
+  liftY=0;rocketTilt=0;particles=[];state='playing';
+  document.getElementById('lvlEl').textContent=li+1;
+  document.getElementById('winsEl').textContent=wins;
+  document.getElementById('scoreEl').textContent=score;
+}
+
+function makeLevel(li){wins=0;usedWords.clear();startWord(li);}
+
+function spawnParticles(x,y,n){
+  for(let i=0;i<n;i++){
+    const a=Math.random()*Math.PI*2,sp=2+Math.random()*5;
+    particles.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-2.5,r:2+Math.random()*5,alpha:1,color:PCOLS[rnd(PCOLS.length)]});
+  }
+}
+
+function checkEnd(){
+  if(state!=='playing')return;
+  if(revealed.every(r=>r)){
+    wins++;score+=word.length*10+hints*5;
+    document.getElementById('scoreEl').textContent=score;
+    document.getElementById('winsEl').textContent=wins;
+    state='won';liftY=0;
+    spawnParticles(ROCKET_CX,PAD_Y-100,20);
+  } else if(wrongGuesses>=LEVELS[lvlIdx].maxWrong){
+    state='lost';rocketTilt=0;
+    // reveal all
+    revealed=revealed.map(()=>true);
+  }
+}
+
+function guessLetter(ch){
+  if(state!=='playing'||guessed.has(ch))return;
+  guessed.add(ch);
+  if(word.includes(ch)){
+    word.split('').forEach((l,i)=>{if(l===ch)revealed[i]=true;});
+    score+=5;document.getElementById('scoreEl').textContent=score;
+    // burst at each revealed letter position
+    const bw=24,bgap=8,tw=word.length*bw+(word.length-1)*bgap;
+    const sx=(W-tw)/2;
+    word.split('').forEach((l,i)=>{
+      if(l===ch)spawnParticles(sx+i*(bw+bgap)+bw/2,105,6);
+    });
+  } else {
+    wrongGuesses++;
+  }
+  checkEnd();
+}
+
+function useHint(){
+  if(state!=='playing'||hints<=0)return;
+  const pool=[];
+  word.split('').forEach((ch,i)=>{if(!revealed[i]&&!guessed.has(ch))pool.push(ch);});
+  if(pool.length===0)return;
+  hints--;
+  const pick=pool[rnd(pool.length)];
+  guessLetter(pick);
+}
+
+// ─── Drawing ─────────────────────────────────────────────────────────────────
+
+function drawStars(th){
+  // simple static stars (deterministic via index)
+  const stars=[[45,30],[120,18],[200,8],[340,22],[410,12],[480,35],[30,80],[490,70],
+    [160,50],[300,40],[440,55],[80,60],[370,65],[230,28],[510,42]];
+  ctx.fillStyle=th.stars;
+  stars.forEach(([x,y])=>{ctx.beginPath();ctx.arc(x,y,1.2,0,Math.PI*2);ctx.fill();});
+}
+
+function drawFuelGauge(th){
+  const gx=28,gy=150,cw=34,ch=20,gap=5,step=ch+gap;
+  ctx.fillStyle='rgba(255,255,255,0.35)';ctx.font='bold 9px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('FUEL',gx+cw/2,gy-12);
+  for(let i=0;i<6;i++){
+    const y=gy+i*step;
+    const drained=wrongGuesses>i;
+    ctx.fillStyle=drained?'rgba(255,255,255,0.06)':th.fuel;
+    ctx.strokeStyle='rgba(255,255,255,0.12)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.roundRect(gx,y,cw,ch,4);ctx.fill();ctx.stroke();
+    if(drained){
+      ctx.strokeStyle='rgba(255,80,80,0.4)';ctx.lineWidth=1.5;
+      ctx.beginPath();ctx.moveTo(gx+7,y+5);ctx.lineTo(gx+cw-7,y+ch-5);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(gx+cw-7,y+5);ctx.lineTo(gx+7,y+ch-5);ctx.stroke();
+    }
+  }
+  // wrong count
+  ctx.fillStyle='rgba(255,120,120,0.6)';ctx.font='10px sans-serif';
+  ctx.fillText(`${wrongGuesses}/6`,gx+cw/2,gy+6*step+8);
+}
+
+function drawPad(){
+  ctx.fillStyle='#546e7a';ctx.beginPath();ctx.roundRect(ROCKET_CX-88,PAD_Y,176,16,5);ctx.fill();
+  ctx.fillStyle='#37474f';
+  ctx.fillRect(ROCKET_CX-62,PAD_Y+16,11,20);ctx.fillRect(ROCKET_CX+51,PAD_Y+16,11,20);
+  ctx.fillRect(ROCKET_CX-64,PAD_Y+34,14,4);ctx.fillRect(ROCKET_CX+50,PAD_Y+34,14,4);
+}
+
+function drawRocket(th){
+  const base=PAD_Y+liftY;
+  const flying=liftY<-25;
+  ctx.save();ctx.translate(ROCKET_CX,base);ctx.rotate(rocketTilt);
+
+  // Exhaust flame
+  if(flying||state==='won'){
+    const t=Date.now()/110;
+    const fh=32+Math.sin(t)*10;
+    ctx.globalAlpha=0.88;ctx.fillStyle='#FF9800';
+    ctx.beginPath();ctx.ellipse(0,fh*0.5,11,fh,0,0,Math.PI*2);ctx.fill();
+    ctx.globalAlpha=0.82;ctx.fillStyle='#FFF176';
+    ctx.beginPath();ctx.ellipse(0,fh*0.35,6,fh*0.62,0,0,Math.PI*2);ctx.fill();
+    ctx.globalAlpha=1;
+  }
+
+  // Left fin
+  ctx.fillStyle=th.accent;
+  ctx.beginPath();ctx.moveTo(-20,-28);ctx.lineTo(-20,-4);ctx.lineTo(-40,6);ctx.closePath();ctx.fill();
+  // Right fin
+  ctx.beginPath();ctx.moveTo(20,-28);ctx.lineTo(20,-4);ctx.lineTo(40,6);ctx.closePath();ctx.fill();
+
+  // Body
+  ctx.fillStyle=th.body;ctx.strokeStyle='rgba(0,0,0,0.12)';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.roundRect(-20,-108,40,88,6);ctx.fill();ctx.stroke();
+
+  // Nose (curved)
+  ctx.fillStyle=th.accent;
+  ctx.beginPath();
+  ctx.moveTo(0,-165);
+  ctx.bezierCurveTo(18,-138,20,-118,20,-108);
+  ctx.lineTo(-20,-108);
+  ctx.bezierCurveTo(-20,-118,-18,-138,0,-165);
+  ctx.closePath();ctx.fill();
+
+  // Stripe on body
+  ctx.fillStyle='rgba(0,0,0,0.07)';ctx.fillRect(-20,-70,40,8);
+  ctx.fillStyle='rgba(0,0,0,0.07)';ctx.fillRect(-20,-55,40,8);
+
+  // Window
+  ctx.fillStyle='#29b6f6';ctx.beginPath();ctx.arc(0,-74,14,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,0.3)';ctx.lineWidth=2;ctx.beginPath();ctx.arc(0,-74,14,0,Math.PI*2);ctx.stroke();
+  ctx.fillStyle='rgba(255,255,255,0.35)';ctx.beginPath();ctx.arc(-5,-80,6,0,Math.PI*2);ctx.fill();
+
+  // Nozzle
+  ctx.fillStyle='#78909c';
+  ctx.beginPath();ctx.moveTo(-10,-20);ctx.lineTo(10,-20);ctx.lineTo(13,0);ctx.lineTo(-13,0);ctx.closePath();ctx.fill();
+
+  ctx.restore();
+}
+
+function drawWord(){
+  const BLW=24,BLGAP=8,BLH=3;
+  const tw=word.length*BLW+(word.length-1)*BLGAP;
+  const sx=(W-tw)/2;
+  const BY=108;
+
+  // Emoji (left side)
+  ctx.font='34px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(emoji,40,BY-8);
+
+  // Category
+  ctx.fillStyle='rgba(255,255,255,0.38)';ctx.font='11px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(category.toUpperCase(),40,BY+18);
+
+  // Letters + blanks
+  [...word].forEach((ch,i)=>{
+    const lx=sx+i*(BLW+BLGAP);
+    if(revealed[i]){
+      const isWrong=state==='lost'&&!guessed.has(ch);
+      ctx.fillStyle=isWrong?'#ef9a9a':'#FFD700';
+      ctx.font='bold 24px sans-serif';ctx.textAlign='center';ctx.textBaseline='bottom';
+      ctx.fillText(ch,lx+BLW/2,BY+2);
+    }
+    // underline
+    const lineCol=revealed[i]?(state==='lost'&&!guessed.has(ch)?'#ef9a9a':'#FFD700'):'rgba(255,255,255,0.35)';
+    ctx.fillStyle=lineCol;ctx.fillRect(lx,BY+5,BLW,BLH);
+  });
+
+  // Word length hint
+  ctx.fillStyle='rgba(255,255,255,0.25)';ctx.font='11px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(`${word.length} letters`,W/2,BY+22);
+}
+
+function drawLetterGrid(th){
+  [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'].forEach(ch=>{
+    const r=LRECTS[ch];
+    let bg,fg,bd;
+    if(!guessed.has(ch)){bg='rgba(255,255,255,0.1)';fg='rgba(255,255,255,0.85)';bd='rgba(255,255,255,0.22)';}
+    else if(word.includes(ch)){bg='#2e7d32';fg='#fff';bd='#43a047';}
+    else{bg='rgba(0,0,0,0.25)';fg='rgba(255,255,255,0.2)';bd='rgba(255,255,255,0.06)';}
+    ctx.fillStyle=bg;ctx.strokeStyle=bd;ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.roundRect(r.x,r.y,r.w,r.h,6);ctx.fill();ctx.stroke();
+    ctx.fillStyle=fg;ctx.font=`bold 14px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(ch,r.x+r.w/2,r.y+r.h/2);
+  });
+}
+
+function drawHintBtn(){
+  const isDisabled=hints<=0||state!=='playing';
+  ctx.fillStyle=isDisabled?'rgba(255,255,255,0.05)':'rgba(255,220,0,0.15)';
+  ctx.strokeStyle=isDisabled?'rgba(255,255,255,0.1)':'rgba(255,220,0,0.5)';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.roundRect(HINT_BTN.x,HINT_BTN.y,HINT_BTN.w,HINT_BTN.h,10);ctx.fill();ctx.stroke();
+  ctx.fillStyle=isDisabled?'rgba(255,255,255,0.2)':'#FFD700';
+  ctx.font=`bold 13px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(`💡 Hint (${hints} left)`,HINT_BTN.x+HINT_BTN.w/2,HINT_BTN.y+HINT_BTN.h/2);
+}
+
+function drawWinsBar(){
+  const needed=LEVELS[lvlIdx].winsNeeded;
+  const pip=22,gap=8,tw=needed*pip+(needed-1)*gap;
+  const sx=W/2-tw/2;
+  for(let i=0;i<needed;i++){
+    ctx.fillStyle=i<wins?'#FFD700':'rgba(255,255,255,0.15)';
+    ctx.beginPath();ctx.arc(sx+i*(pip+gap)+pip/2,137,pip/2,0,Math.PI*2);ctx.fill();
+    if(i<wins){ctx.fillStyle='#1a1a1a';ctx.font='bold 11px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('★',sx+i*(pip+gap)+pip/2,137);}
+  }
+}
+
+function draw(){
+  const th=THEMES[lvlIdx%THEMES.length];
+  ctx.fillStyle=th.sky;ctx.fillRect(0,0,W,H);
+  drawStars(th);
+
+  // Header strip
+  ctx.fillStyle='rgba(255,255,255,0.04)';ctx.fillRect(0,0,W,58);
+  ctx.fillStyle='rgba(255,255,255,0.3)';ctx.font='bold 15px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(`${LEVELS[lvlIdx].label} — ${LEVELS[lvlIdx].winsNeeded} wins to advance`,W/2,18);
+  ctx.fillStyle='rgba(255,255,255,0.18)';ctx.font='12px sans-serif';
+  ctx.fillText(`Wins this level:`,W/2,38);
+
+  drawWinsBar();
+  drawWord();
+
+  // Animate rocket states
+  if(state==='won'){liftY+=(-500-liftY)*0.045;}
+  if(state==='lost'){rocketTilt+=(0.34-rocketTilt)*0.055;}
+
+  drawFuelGauge(th);
+  drawPad();
+  drawRocket(th);
+
+  drawLetterGrid(th);
+  drawHintBtn();
+
+  // Particles
+  particles=particles.filter(p=>p.alpha>0.05);
+  particles.forEach(p=>{
+    ctx.globalAlpha=p.alpha;ctx.fillStyle=p.color;
+    ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();
+    p.x+=p.vx;p.y+=p.vy;p.vy+=0.12;p.alpha-=0.024;
+  });
+  ctx.globalAlpha=1;
+
+  // State overlays
+  if(state==='won'&&liftY<-120){
+    ctx.fillStyle='rgba(0,0,0,0.55)';ctx.fillRect(0,0,W,H);
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.font='bold 44px sans-serif';ctx.fillStyle='#FFD700';
+    ctx.fillText('🚀 Launched!',W/2,H/2-42);
+    ctx.font='22px sans-serif';ctx.fillStyle='#fff';
+    ctx.fillText(`The word was: ${word}`,W/2,H/2+14);
+    ctx.font='16px sans-serif';ctx.fillStyle='#FFD700';
+    ctx.fillText(wins>=LEVELS[lvlIdx].winsNeeded?'Level complete! Tap →':'Tap for next word →',W/2,H/2+56);
+  }
+  if(state==='lost'){
+    if(rocketTilt>0.28){
+      ctx.fillStyle='rgba(0,0,0,0.55)';ctx.fillRect(0,0,W,H);
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.font='bold 36px sans-serif';ctx.fillStyle='#ef9a9a';
+      ctx.fillText('Launch aborted! 😬',W/2,H/2-42);
+      ctx.font='22px sans-serif';ctx.fillStyle='#fff';
+      ctx.fillText(`The word was: ${word}`,W/2,H/2+14);
+      ctx.font='16px sans-serif';ctx.fillStyle='#FFD700';
+      ctx.fillText('Tap to try another →',W/2,H/2+56);
+    }
+  }
+}
+
+function handleTap(x,y){
+  if(state==='won'&&liftY<-120){
+    if(wins>=LEVELS[lvlIdx].winsNeeded){
+      if(lvlIdx<LEVELS.length-1){lvlIdx++;makeLevel(lvlIdx);}
+      else{lvlIdx=0;score=0;makeLevel(0);}
+    } else {startWord(lvlIdx);}
+    return;
+  }
+  if(state==='lost'&&rocketTilt>0.28){startWord(lvlIdx);return;}
+  if(state!=='playing')return;
+
+  // Hint button
+  if(x>=HINT_BTN.x&&x<=HINT_BTN.x+HINT_BTN.w&&y>=HINT_BTN.y&&y<=HINT_BTN.y+HINT_BTN.h){
+    useHint();return;
+  }
+
+  // Letter grid
+  for(const ch in LRECTS){
+    const r=LRECTS[ch];
+    if(x>=r.x&&x<=r.x+r.w&&y>=r.y&&y<=r.y+r.h){guessLetter(ch);return;}
+  }
+}
+
+canvas.addEventListener('click',e=>{const r=canvas.getBoundingClientRect();handleTap((e.clientX-r.left)*(W/r.width),(e.clientY-r.top)*(H/r.height));});
+canvas.addEventListener('touchstart',e=>{e.preventDefault();const r=canvas.getBoundingClientRect();handleTap((e.touches[0].clientX-r.left)*(W/r.width),(e.touches[0].clientY-r.top)*(H/r.height));},{passive:false});
+
+function loop(){draw();requestAnimationFrame(loop);}
+makeLevel(0);requestAnimationFrame(loop);
+</script>
+</body>
+</html>

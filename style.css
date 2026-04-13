@@ -122,6 +122,11 @@ a { text-decoration: none; color: inherit; }
 .card-balance .play-btn { background: #3F51B5; color: #fff; }
 .card-balance .badge    { background: rgba(63,81,181,0.2); color: #9FA8DA; }
 
+/* Rocket Words — teal/space */
+.card-rocket  { border-color: rgba(0,230,118,0.4); }
+.card-rocket  .play-btn { background: #00E676; color: #00251a; }
+.card-rocket  .badge    { background: rgba(0,230,118,0.2); color: #69F0AE; }
+
 /* ── In-game back button ── */
 .back-btn {
   display: inline-flex;
