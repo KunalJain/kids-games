@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Maze Explorer</title>
+<link rel="stylesheet" href="../style.css">
+<style>
+  body { display:flex; flex-direction:column; align-items:center; }
+  #mazeCanvas { border-radius:12px; display:block; max-width:100%; }
+  #ui { display:flex; gap:24px; font-size:16px; font-weight:600; padding:0.5rem 0; }
+  #msg { font-size:14px; color:rgba(255,255,255,0.5); padding-bottom:1rem; }
+</style>
+</head>
+<body>
+
+<div class="game-header">
+  <a href="../index.html" class="back-btn">← Back</a>
+  <h1>🌀 Maze Explorer</h1>
+</div>
+
+<div id="ui">
+  <span>🏆 Level <span id="mlevel">1</span></span>
+  <span>⏱ Time: <span id="mtime">0</span>s</span>
+  <span>⭐ Best: <span id="mbest">--</span>s</span>
+</div>
+<canvas id="mazeCanvas" width="560" height="560"></canvas>
+<div id="msg">Arrow keys or WASD to move through the maze!</div>
+
+<script>
+const canvas=document.getElementById('mazeCanvas');
+const ctx=canvas.getContext('2d');
+const SIZE=560;
+const LEVELS=[{cols:9,rows:9},{cols:13,rows:13},{cols:17,rows:17},{cols:21,rows:21}];
+let level=0,timer=0,timerInterval=null,best=Infinity,maze,player,cols,rows,cellSize,pendingNext=false;
+
+const WALL_COLORS=['#3B4DA8','#1B7A4A','#8B2252','#5B3AA0'];
+const PATH_COLORS=['#E8EEFF','#E8FFF3','#FFE8F3','#EFE8FF'];
+
+function buildMaze(c,r){
+  const grid=Array.from({length:r},(_,y)=>Array.from({length:c},(_,x)=>({x,y,visited:false,walls:{top:true,right:true,bottom:true,left:true}})));
+  function idx(x,y){return y>=0&&y<r&&x>=0&&x<c?grid[y][x]:null;}
+  const stack=[],start=grid[0][0];start.visited=true;stack.push(start);
+  while(stack.length){
+    const cur=stack[stack.length-1];
+    const neighbors=[{cell:idx(cur.x,cur.y-1),dir:'top',opp:'bottom'},{cell:idx(cur.x+1,cur.y),dir:'right',opp:'left'},{cell:idx(cur.x,cur.y+1),dir:'bottom',opp:'top'},{cell:idx(cur.x-1,cur.y),dir:'left',opp:'right'}].filter(n=>n.cell&&!n.cell.visited);
+    if(neighbors.length){const {cell,dir,opp}=neighbors[Math.floor(Math.random()*neighbors.length)];cur.walls[dir]=false;cell.walls[opp]=false;cell.visited=true;stack.push(cell);}
+    else stack.pop();
+  }
+  return grid;
+}
+
+function startLevel(l){
+  level=l;document.getElementById('mlevel').textContent=l+1;
+  const cfg=LEVELS[l];cols=cfg.cols;rows=cfg.rows;cellSize=SIZE/cols;
+  maze=buildMaze(cols,rows);player={x:0,y:0};
+  clearInterval(timerInterval);timer=0;document.getElementById('mtime').textContent='0';
+  timerInterval=setInterval(()=>{timer++;document.getElementById('mtime').textContent=timer;},1000);
+  pendingNext=false;draw();
+}
+
+function draw(){
+  const wc=WALL_COLORS[level%WALL_COLORS.length];
+  const pc=PATH_COLORS[level%PATH_COLORS.length];
+  ctx.fillStyle=wc;ctx.fillRect(0,0,SIZE,SIZE);
+  for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){const px=x*cellSize,py=y*cellSize;ctx.fillStyle=pc;ctx.fillRect(px+1,py+1,cellSize-2,cellSize-2);}
+
+  ctx.fillStyle='#FFD700';
+  const gs=cellSize*0.7,gx=(cols-1)*cellSize+cellSize/2-gs/2,gy=(rows-1)*cellSize+cellSize/2-gs/2,cx2=gx+gs/2,cy2=gy+gs/2,r=gs/2;
+  ctx.beginPath();
+  for(let i=0;i<10;i++){const angle=(i*Math.PI/5)-Math.PI/2,rad=i%2===0?r:r*0.45;i===0?ctx.moveTo(cx2+rad*Math.cos(angle),cy2+rad*Math.sin(angle)):ctx.lineTo(cx2+rad*Math.cos(angle),cy2+rad*Math.sin(angle));}
+  ctx.closePath();ctx.fill();ctx.strokeStyle='#E6A800';ctx.lineWidth=1.5;ctx.stroke();
+
+  ctx.strokeStyle=wc;const lw=Math.max(2,cellSize*0.12);ctx.lineWidth=lw;ctx.lineCap='round';
+  for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){
+    const cell=maze[y][x],px=x*cellSize,py=y*cellSize;
+    ctx.beginPath();
+    if(cell.walls.top){ctx.moveTo(px,py);ctx.lineTo(px+cellSize,py);}
+    if(cell.walls.right){ctx.moveTo(px+cellSize,py);ctx.lineTo(px+cellSize,py+cellSize);}
+    if(cell.walls.bottom){ctx.moveTo(px,py+cellSize);ctx.lineTo(px+cellSize,py+cellSize);}
+    if(cell.walls.left){ctx.moveTo(px,py);ctx.lineTo(px,py+cellSize);}
+    ctx.stroke();
+  }
+  ctx.fillStyle='#2ECC71';ctx.beginPath();ctx.arc(cellSize/2,cellSize/2,cellSize*0.28,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#fff';ctx.font=`bold ${cellSize*0.3}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('GO',cellSize/2,cellSize/2);
+
+  const px2=player.x*cellSize+cellSize/2,py2=player.y*cellSize+cellSize/2;
+  ctx.font=`${cellSize*0.52}px sans-serif`;ctx.fillText('😀',px2,py2+1);
+
+  if(pendingNext){
+    ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(0,0,SIZE,SIZE);
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.font=`bold ${SIZE*0.09}px sans-serif`;ctx.fillStyle='#FFD700';
+    ctx.fillText(level>=LEVELS.length-1?'You Win! 🎉':'Level Clear! ⭐',SIZE/2,SIZE/2-50);
+    ctx.font=`${SIZE*0.05}px sans-serif`;ctx.fillStyle='#fff';ctx.fillText(`Time: ${timer}s`,SIZE/2,SIZE/2+10);
+    ctx.font=`${SIZE*0.04}px sans-serif`;ctx.fillStyle='#FFD700';ctx.fillText('Press Space or click!',SIZE/2,SIZE/2+65);
+  }
+}
+
+function tryMove(dx,dy){
+  if(pendingNext)return;
+  const cell=maze[player.y][player.x];
+  const dirMap=[{dx:0,dy:-1,wall:'top'},{dx:1,dy:0,wall:'right'},{dx:0,dy:1,wall:'bottom'},{dx:-1,dy:0,wall:'left'}];
+  const d=dirMap.find(d=>d.dx===dx&&d.dy===dy);
+  if(!d||cell.walls[d.wall])return;
+  player.x+=dx;player.y+=dy;
+  draw();
+  if(player.x===cols-1&&player.y===rows-1){
+    clearInterval(timerInterval);
+    if(timer<best){best=timer;document.getElementById('mbest').textContent=best+'s';}
+    setTimeout(()=>{pendingNext=true;draw();},200);
+  }
+}
+
+function handleNext(){
+  if(!pendingNext)return;
+  if(level<LEVELS.length-1)startLevel(level+1);
+  else startLevel(0);
+}
+
+document.addEventListener('keydown',e=>{
+  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();
+  if(e.code==='Space'||e.code==='Enter'){handleNext();return;}
+  if(e.code==='ArrowUp'||e.code==='KeyW')tryMove(0,-1);
+  if(e.code==='ArrowDown'||e.code==='KeyS')tryMove(0,1);
+  if(e.code==='ArrowLeft'||e.code==='KeyA')tryMove(-1,0);
+  if(e.code==='ArrowRight'||e.code==='KeyD')tryMove(1,0);
+});
+canvas.addEventListener('click',handleNext);
+
+let touchStart=null;
+canvas.addEventListener('touchstart',e=>{touchStart={x:e.touches[0].clientX,y:e.touches[0].clientY};},{passive:true});
+canvas.addEventListener('touchend',e=>{
+  if(!touchStart)return;
+  const dx=e.changedTouches[0].clientX-touchStart.x,dy=e.changedTouches[0].clientY-touchStart.y;
+  if(Math.abs(dx)>Math.abs(dy)){if(dx>20)tryMove(1,0);else if(dx<-20)tryMove(-1,0);}
+  else{if(dy>20)tryMove(0,1);else if(dy<-20)tryMove(0,-1);}
+  touchStart=null;
+},{passive:true});
+
+startLevel(0);
+</script>
+</body>
+</html>

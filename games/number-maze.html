@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Number Jump</title>
+<link rel="stylesheet" href="../style.css">
+<style>
+  body { display:flex; flex-direction:column; align-items:center; }
+  #jCanvas { border-radius:14px; display:block; max-width:100%; cursor:pointer; }
+  #ui { display:flex; gap:20px; font-size:16px; font-weight:600; padding:0.5rem 0; align-items:center; }
+  #jNext { background:#FFD700; color:#6b4000; border-radius:20px; padding:3px 14px; font-weight:800; font-size:18px; }
+  #msg { font-size:14px; color:rgba(255,255,255,0.5); padding-bottom:1rem; }
+</style>
+</head>
+<body>
+
+<div class="game-header">
+  <a href="../index.html" class="back-btn">← Back</a>
+  <h1>🐸 Number Jump</h1>
+</div>
+
+<div id="ui">
+  <span>⭐ Level <span id="jlvl">1</span></span>
+  <span>Jump to: <span id="jNext">1</span></span>
+  <span>🏆 Score: <span id="jscore">0</span></span>
+</div>
+<canvas id="jCanvas" width="520" height="520"></canvas>
+<div id="msg">Tap numbers in order: 1, 2, 3... to reach the finish!</div>
+
+<script>
+const canvas=document.getElementById('jCanvas');
+const ctx=canvas.getContext('2d');
+const SZ=520;
+const LEVELS=[{grid:4,count:6},{grid:5,count:9},{grid:6,count:12},{grid:7,count:16}];
+const BG_THEMES=[{bg:'#E8F4FF',cell1:'#fff',cell2:'#dbeeff',accent:'#3B8FE8',trail:'#90C4F7'},{bg:'#EDFFF0',cell1:'#fff',cell2:'#d5f5e3',accent:'#2EAA4A',trail:'#82E0AA'},{bg:'#FFF5E8',cell1:'#fff',cell2:'#fdebd0',accent:'#E07820',trail:'#F0A060'},{bg:'#F5E8FF',cell1:'#fff',cell2:'#edd5ff',accent:'#8840D0',trail:'#C39BD3'}];
+const NUM_COLORS=['#E74C3C','#E67E22','#F1C40F','#2ECC71','#3498DB','#9B59B6','#E91E8C','#00BCD4','#FF5722','#8BC34A','#673AB7','#FF9800','#795548','#607D8B','#009688','#F44336'];
+let lvlIdx=0,nextNum=1,score=0,cells=[],playerCell=null,animPct=1,animFrom=null,animTarget=null,shakeCell=null,shakeTick=0,state='playing';
+
+function makeLevel(li){
+  const cfg=LEVELS[li],g=cfg.grid,cellSz=SZ/g;
+  const allPos=[];
+  for(let r=0;r<g;r++)for(let c=0;c<g;c++)allPos.push({r,c});
+  for(let i=allPos.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[allPos[i],allPos[j]]=[allPos[j],allPos[i]];}
+  cells=allPos.slice(0,cfg.count).map((pos,i)=>({r:pos.r,c:pos.c,num:i+1,x:pos.c*cellSz+cellSz/2,y:pos.r*cellSz+cellSz/2,sz:cellSz,visited:false}));
+  playerCell=cells[0];playerCell.visited=true;nextNum=2;animFrom=null;animTarget=null;animPct=1;shakeCell=null;state='playing';
+  document.getElementById('jlvl').textContent=li+1;document.getElementById('jNext').textContent=nextNum;
+}
+
+function getCellAt(x,y){const g=LEVELS[lvlIdx].grid,cellSz=SZ/g,c=Math.floor(x/cellSz),r=Math.floor(y/cellSz);return cells.find(cell=>cell.r===r&&cell.c===c)||null;}
+function lerp(a,b,t){return a+(b-a)*t;}function easeOut(t){return 1-Math.pow(1-t,3);}
+
+function draw(){
+  const li=lvlIdx,th=BG_THEMES[li%BG_THEMES.length],g=LEVELS[li].grid,cellSz=SZ/g;
+  ctx.fillStyle=th.bg;ctx.fillRect(0,0,SZ,SZ);
+  for(let r=0;r<g;r++)for(let c=0;c<g;c++){ctx.fillStyle=(r+c)%2===0?th.cell1:th.cell2;ctx.beginPath();ctx.roundRect(c*cellSz+2,r*cellSz+2,cellSz-4,cellSz-4,8);ctx.fill();}
+
+  const visited=cells.filter(c=>c.visited);
+  if(visited.length>1){
+    ctx.strokeStyle=th.trail;ctx.lineWidth=Math.max(4,cellSz*0.18);ctx.lineCap='round';ctx.globalAlpha=0.5;ctx.setLineDash([cellSz*0.18,cellSz*0.1]);
+    ctx.beginPath();visited.forEach((c,i)=>i===0?ctx.moveTo(c.x,c.y):ctx.lineTo(c.x,c.y));ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=1;
+  }
+
+  const t=Date.now()/600;
+  cells.forEach(cell=>{
+    const col=NUM_COLORS[(cell.num-1)%NUM_COLORS.length],r=cell.sz*0.38;
+    let ox=0,oy=0;
+    if(shakeCell===cell&&shakeTick>0){ox=(Math.random()-0.5)*8;oy=(Math.random()-0.5)*8;}
+    if(cell.visited){
+      ctx.globalAlpha=0.4;ctx.fillStyle=col;ctx.beginPath();ctx.arc(cell.x+ox,cell.y+oy,r,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;
+      ctx.font=`bold ${cell.sz*0.35}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('✓',cell.x+ox,cell.y+oy);
+    } else {
+      const pulse=cell.num===nextNum?Math.sin(t)*4:0;
+      ctx.shadowColor=col;ctx.shadowBlur=cell.num===nextNum?14:0;
+      ctx.fillStyle=col;ctx.beginPath();ctx.arc(cell.x+ox,cell.y+oy,r+pulse,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;
+      ctx.fillStyle='#fff';ctx.font=`bold ${cell.num>=10?cell.sz*0.26:cell.sz*0.32}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText(cell.num,cell.x+ox,cell.y+oy);
+      if(cell.num===nextNum){ctx.strokeStyle='#fff';ctx.lineWidth=2.5;ctx.beginPath();ctx.arc(cell.x,cell.y,r+pulse+5+Math.sin(t)*3,0,Math.PI*2);ctx.stroke();}
+    }
+  });
+
+  let px,py;
+  if(animTarget&&animPct<1){const et=easeOut(animPct);px=lerp(animFrom.x,animTarget.x,et);py=lerp(animFrom.y,animTarget.y,et)-Math.sin(animPct*Math.PI)*LEVELS[lvlIdx].grid*SZ/LEVELS[lvlIdx].grid*0.8/LEVELS[lvlIdx].grid*LEVELS[lvlIdx].grid;}
+  else{px=playerCell.x;py=playerCell.y;}
+  const cellSz2=SZ/LEVELS[lvlIdx].grid;
+  ctx.font=`${cellSz2*0.52}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('🐸',px,py);
+
+  if(state==='win'||state==='levelup'){
+    ctx.fillStyle='rgba(0,0,0,0.55)';ctx.fillRect(0,0,SZ,SZ);
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.font=`bold ${SZ*0.09}px sans-serif`;ctx.fillStyle='#FFD700';
+    ctx.fillText(state==='win'?'You Win! 🎉':'Level Up! ⭐',SZ/2,SZ/2-40);
+    ctx.font=`${SZ*0.05}px sans-serif`;ctx.fillStyle='#fff';ctx.fillText(state==='win'?`Score: ${score}`:'Great job!',SZ/2,SZ/2+20);
+    ctx.font=`${SZ*0.038}px sans-serif`;ctx.fillStyle='#FFD700';ctx.fillText('Tap to continue!',SZ/2,SZ/2+65);
+  }
+}
+
+let lastTime=0;
+function loop(ts){
+  if(animTarget&&animPct<1){
+    animPct=Math.min(1,animPct+(ts-lastTime)/350);
+    if(animPct>=1){playerCell=animTarget;animTarget=null;}
+  }
+  lastTime=ts;if(shakeCell&&shakeTick>0)shakeTick--;draw();requestAnimationFrame(loop);
+}
+
+function handleTap(x,y){
+  if(state==='win'){lvlIdx=0;score=0;makeLevel(0);document.getElementById('jscore').textContent=0;return;}
+  if(state==='levelup'){lvlIdx=Math.min(lvlIdx+1,LEVELS.length-1);makeLevel(lvlIdx);return;}
+  if(animTarget)return;
+  const clicked=getCellAt(x,y);
+  if(!clicked)return;
+  if(clicked.num===nextNum&&!clicked.visited){
+    animFrom={x:playerCell.x,y:playerCell.y};animTarget=clicked;animPct=0;clicked.visited=true;
+    score+=10;document.getElementById('jscore').textContent=score;
+    if(nextNum===cells.length){setTimeout(()=>{state=lvlIdx>=LEVELS.length-1?'win':'levelup';},400);}
+    else{nextNum++;document.getElementById('jNext').textContent=nextNum;}
+  } else if(!clicked.visited){shakeCell=clicked;shakeTick=8;}
+}
+
+canvas.addEventListener('click',e=>{const rect=canvas.getBoundingClientRect();handleTap((e.clientX-rect.left)*(SZ/rect.width),(e.clientY-rect.top)*(SZ/rect.height));});
+canvas.addEventListener('touchstart',e=>{e.preventDefault();const rect=canvas.getBoundingClientRect();handleTap((e.touches[0].clientX-rect.left)*(SZ/rect.width),(e.touches[0].clientY-rect.top)*(SZ/rect.height));},{passive:false});
+
+makeLevel(0);requestAnimationFrame(loop);
+</script>
+</body>
+</html>

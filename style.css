@@ -1,0 +1,144 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: #0f0f1a;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  color: #fff;
+  min-height: 100vh;
+}
+
+a { text-decoration: none; color: inherit; }
+
+/* ── Header ── */
+.site-header {
+  text-align: center;
+  padding: 3rem 1rem 1.5rem;
+}
+.site-header h1 {
+  font-size: clamp(2rem, 5vw, 3.2rem);
+  font-weight: 800;
+  background: linear-gradient(135deg, #FFD700 0%, #FF6B6B 50%, #C084FC 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 0.5rem;
+}
+.site-header p {
+  color: rgba(255,255,255,0.55);
+  font-size: 1.05rem;
+}
+
+/* ── Game grid ── */
+.game-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.5rem;
+  max-width: 1100px;
+  margin: 2rem auto;
+  padding: 0 1.5rem 4rem;
+}
+
+.game-card {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 20px;
+  padding: 2rem 1.5rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  transition: transform 0.2s, border-color 0.2s, background 0.2s;
+  cursor: pointer;
+}
+.game-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(255,255,255,0.25);
+  background: rgba(255,255,255,0.09);
+}
+.game-card .icon {
+  font-size: 3rem;
+  line-height: 1;
+}
+.game-card h2 {
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+.game-card p {
+  font-size: 0.9rem;
+  color: rgba(255,255,255,0.55);
+  line-height: 1.5;
+  flex: 1;
+}
+.game-card .badge {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 20px;
+  width: fit-content;
+}
+.game-card .play-btn {
+  display: inline-block;
+  margin-top: 0.5rem;
+  padding: 10px 24px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  text-align: center;
+  transition: opacity 0.15s, transform 0.1s;
+}
+.game-card .play-btn:hover { opacity: 0.85; transform: scale(0.98); }
+
+/* card accent colours */
+.card-mario  { border-color: rgba(231,76,60,0.4);   }
+.card-mario  .play-btn { background: #E74C3C; color: #fff; }
+.card-mario  .badge { background: rgba(231,76,60,0.2); color: #ff9d94; }
+
+.card-maze   { border-color: rgba(46,204,113,0.4);  }
+.card-maze   .play-btn { background: #2ECC71; color: #fff; }
+.card-maze   .badge { background: rgba(46,204,113,0.2); color: #82f5b3; }
+
+.card-number { border-color: rgba(241,196,15,0.4);  }
+.card-number .play-btn { background: #F1C40F; color: #3a2d00; }
+.card-number .badge { background: rgba(241,196,15,0.2); color: #ffe88a; }
+
+.card-beast  { border-color: rgba(155,89,182,0.4);  }
+.card-beast  .play-btn { background: #9B59B6; color: #fff; }
+.card-beast  .badge { background: rgba(155,89,182,0.2); color: #d4a8f0; }
+
+/* ── In-game back button ── */
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 10px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: rgba(255,255,255,0.8);
+  cursor: pointer;
+  transition: background 0.15s;
+  text-decoration: none;
+}
+.back-btn:hover { background: rgba(255,255,255,0.18); }
+
+.game-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+}
+.game-header h1 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #FFD700;
+}
+
+/* ── Footer ── */
+.site-footer {
+  text-align: center;
+  padding: 1.5rem;
+  color: rgba(255,255,255,0.25);
+  font-size: 0.8rem;
+}
