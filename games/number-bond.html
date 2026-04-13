@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Number Bond Bubbles</title>
+<link rel="stylesheet" href="../style.css">
+<style>
+  body{display:flex;flex-direction:column;align-items:center;}
+  #canvas{border-radius:14px;display:block;max-width:100%;cursor:pointer;}
+  #ui{display:flex;gap:16px;font-size:15px;font-weight:600;padding:0.5rem 0;align-items:center;flex-wrap:wrap;justify-content:center;}
+  #msg{font-size:14px;color:rgba(255,255,255,0.5);padding-bottom:0.5rem;}
+</style>
+</head>
+<body>
+<div class="game-header">
+  <a href="../index.html" class="back-btn">← Back</a>
+  <h1>🫧 Number Bond Bubbles</h1>
+</div>
+<div id="ui">
+  <span>⭐ Lvl <span id="lvlEl">1</span></span>
+  <span>💯 Score: <span id="scoreEl">0</span></span>
+  <span>❌ Errors: <span id="errEl">0</span></span>
+</div>
+<canvas id="canvas" width="520" height="520"></canvas>
+<div id="msg">Tap two bubbles that add up to the target number!</div>
+
+<script>
+const canvas=document.getElementById('canvas'),ctx=canvas.getContext('2d'),W=520,H=520;
+
+const THEMES=[
+  {bg:'#1a1a4e',bar:'#12124a',bubBase:['#e74c3c','#e67e22','#f1c40f','#27ae60','#2980b9','#8e44ad']},
+  {bg:'#0d2b1f',bar:'#0a2418',bubBase:['#1abc9c','#2ecc71','#f39c12','#e74c3c','#9b59b6','#3498db']},
+  {bg:'#1c0a2e',bar:'#160820',bubBase:['#e91e63','#9c27b0','#3f51b5','#009688','#ff5722','#ffc107']},
+  {bg:'#1a0a00',bar:'#150800',bubBase:['#ff7043','#ffb300','#66bb6a','#29b6f6','#7e57c2','#ec407a']},
+];
+const LEVELS=[
+  {target:10, numRange:[1,9],   count:6, label:'Make 10',    pairsToWin:3, missing:false},
+  {target:12, numRange:[2,10],  count:7, label:'Make 12',    pairsToWin:3, missing:false},
+  {target:20, numRange:[3,17],  count:8, label:'Make 20',    pairsToWin:3, missing:false},
+  {target:10, numRange:[1,9],   count:5, label:'Missing ?',  pairsToWin:4, missing:true},
+];
+const PCOLS=['#FFD700','#FF6B6B','#4FC3F7','#A5D6A7','#CE93D8','#FFCC80'];
+
+let lvlIdx=0,score=0,errors=0,state='playing';
+let bubbles=[],selectedIdx=-1,pairsLeft=0,particles=[];
+let popAnim=[]; // {x,y,r,alpha,color}
+
+function rnd(n){return Math.floor(Math.random()*n);}
+function rndBetween(a,b){return a+rnd(b-a+1);}
+
+// Build a pool of bubbles guaranteed to have valid pairs on screen
+function makeBubblePool(li){
+  const cfg=LEVELS[li];
+  const [lo,hi]=cfg.numRange;
+  const pool=[];
+  // generate cfg.count/2 pairs (ceil)
+  const pairs=Math.ceil(cfg.count/2);
+  for(let i=0;i<pairs;i++){
+    let a;
+    if(cfg.missing){
+      // one bubble is '?' (the missing addend), one is the fixed number
+      const fixed=rndBetween(lo,hi);
+      const missing=cfg.target-fixed;
+      if(missing>=lo&&missing<=hi){pool.push({type:'fixed',val:fixed});pool.push({type:'missing',val:missing});}
+      else{i--;continue;}
+    } else {
+      a=rndBetween(lo,hi);
+      const b=cfg.target-a;
+      if(b>=lo&&b<=hi&&b!==a){pool.push({type:'normal',val:a});pool.push({type:'normal',val:b});}
+      else{i--;continue;}
+    }
+  }
+  return pool.slice(0,cfg.count);
+}
+
+function makeBubbles(li){
+  const cfg=LEVELS[li];
+  const pool=makeBubblePool(li);
+  // shuffle pool
+  for(let i=pool.length-1;i>0;i--){const j=rnd(i+1);[pool[i],pool[j]]=[pool[j],pool[i]];}
+  const th=THEMES[li%THEMES.length];
+  return pool.map((p,i)=>{
+    const col=th.bubBase[i%th.bubBase.length];
+    return{
+      val:p.val,type:p.type,
+      x:40+rnd(W-80),y:H-60+rnd(120),  // start below screen
+      r:28+rnd(8),
+      vy:-(0.4+Math.random()*0.6),       // float upward
+      vx:(Math.random()-0.5)*0.3,
+      phase:Math.random()*Math.PI*2,     // sine drift phase
+      col,
+      selected:false,
+      popping:false,popR:0,popAlpha:1,
+      shake:0
+    };
+  });
+}
+
+function makeLevel(li){
+  const cfg=LEVELS[li];
+  bubbles=makeBubbles(li);
+  pairsLeft=cfg.pairsToWin;
+  selectedIdx=-1;particles=[];popAnim=[];state='playing';
+  document.getElementById('lvlEl').textContent=li+1;
+  document.getElementById('scoreEl').textContent=score;
+  document.getElementById('errEl').textContent=errors;
+}
+
+function spawnParticles(x,y){
+  for(let i=0;i<14;i++){
+    const a=Math.random()*Math.PI*2,sp=2.5+Math.random()*4;
+    particles.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-2,r:3+Math.random()*5,alpha:1,color:PCOLS[rnd(PCOLS.length)]});
+  }
+}
+
+function popBubble(idx){
+  const b=bubbles[idx];
+  // create expanding ring
+  popAnim.push({x:b.x,y:b.y,r:b.r,alpha:1,color:b.col});
+  spawnParticles(b.x,b.y);
+  bubbles.splice(idx,1);
+  // adjust selectedIdx if needed
+  if(selectedIdx===idx)selectedIdx=-1;
+  else if(selectedIdx>idx)selectedIdx--;
+}
+
+function replenishBubbles(li){
+  // after a pop, add new valid pair to maintain count
+  const cfg=LEVELS[li];
+  if(bubbles.length>=cfg.count)return;
+  const pool=makeBubblePool(li);
+  for(let i=pool.length-1;i>0;i--){const j=rnd(i+1);[pool[i],pool[j]]=[pool[j],pool[i]];}
+  const th=THEMES[li%THEMES.length];
+  const need=cfg.count-bubbles.length;
+  pool.slice(0,Math.min(need,pool.length)).forEach((p,i)=>{
+    const col=th.bubBase[(bubbles.length+i)%th.bubBase.length];
+    bubbles.push({val:p.val,type:p.type,x:40+rnd(W-80),y:H+20+rnd(60),r:28+rnd(8),vy:-(0.4+Math.random()*0.6),vx:(Math.random()-0.5)*0.3,phase:Math.random()*Math.PI*2,col,selected:false,popping:false,popR:0,popAlpha:1,shake:0});
+  });
+}
+
+function checkPair(i1,i2){
+  const b1=bubbles[i1],b2=bubbles[i2];
+  const sum=b1.val+b2.val;
+  const target=LEVELS[lvlIdx].target;
+  return sum===target;
+}
+
+function handleTap(x,y){
+  if(state==='levelup'){if(lvlIdx<LEVELS.length-1){lvlIdx++;makeLevel(lvlIdx);}return;}
+  if(state==='win'){lvlIdx=0;score=0;errors=0;makeLevel(0);return;}
+  if(state!=='playing')return;
+
+  // find tapped bubble (check in reverse so top-drawn bubbles get priority)
+  let hit=-1;
+  for(let i=bubbles.length-1;i>=0;i--){
+    const b=bubbles[i];
+    const dx=x-b.x,dy=y-b.y;
+    if(dx*dx+dy*dy<=b.r*b.r){hit=i;break;}
+  }
+  if(hit===-1)return;
+
+  if(selectedIdx===-1){
+    bubbles[hit].selected=true;selectedIdx=hit;
+  } else if(selectedIdx===hit){
+    // deselect
+    bubbles[hit].selected=false;selectedIdx=-1;
+  } else {
+    // second bubble tapped — check pair
+    if(checkPair(selectedIdx,hit)){
+      score+=15;document.getElementById('scoreEl').textContent=score;
+      spawnParticles((bubbles[selectedIdx].x+bubbles[hit].x)/2,(bubbles[selectedIdx].y+bubbles[hit].y)/2);
+      // pop both (higher index first so lower index stays valid)
+      const hi=Math.max(selectedIdx,hit),lo=Math.min(selectedIdx,hit);
+      popBubble(hi);popBubble(lo);
+      selectedIdx=-1;
+      replenishBubbles(lvlIdx);
+      pairsLeft--;
+      if(pairsLeft<=0)setTimeout(()=>{state=lvlIdx>=LEVELS.length-1?'win':'levelup';},700);
+    } else {
+      errors++;document.getElementById('errEl').textContent=errors;
+      bubbles[selectedIdx].shake=8;bubbles[hit].shake=8;
+      bubbles[selectedIdx].selected=false;selectedIdx=-1;
+    }
+  }
+}
+
+function draw(){
+  const li=lvlIdx,th=THEMES[li%THEMES.length],cfg=LEVELS[li];
+  ctx.fillStyle=th.bg;ctx.fillRect(0,0,W,H);
+
+  // Header bar
+  ctx.fillStyle='rgba(255,255,255,0.07)';ctx.fillRect(0,0,W,68);
+  ctx.textAlign='center';ctx.textBaseline='middle';
+
+  if(cfg.missing){
+    ctx.font='bold 22px sans-serif';ctx.fillStyle='#fff';
+    ctx.fillText('? + ',W/2-55,28);
+    ctx.fillStyle='#FFD700';ctx.font='bold 28px sans-serif';
+    ctx.fillText(cfg.target,W/2+20,28);
+    ctx.fillStyle='rgba(255,255,255,0.6)';ctx.font='15px sans-serif';
+    ctx.fillText('Find the missing addend!',W/2,52);
+  } else {
+    ctx.fillStyle='rgba(255,255,255,0.7)';ctx.font='16px sans-serif';
+    ctx.fillText('Pop pairs that add up to',W/2,20);
+    ctx.fillStyle='#FFD700';ctx.font='bold 34px sans-serif';
+    ctx.fillText(cfg.target,W/2,48);
+  }
+
+  // Pairs left indicator (top-right)
+  ctx.fillStyle='rgba(255,255,255,0.5)';ctx.font='13px sans-serif';ctx.textAlign='right';
+  ctx.fillText(`Pairs left: ${pairsLeft}`,W-12,14);
+  ctx.textAlign='center';
+
+  // Update & draw bubbles
+  const tick=Date.now()/400;
+  bubbles.forEach(b=>{
+    // physics
+    b.x+=b.vx+Math.sin(tick*0.7+b.phase)*0.4;
+    b.y+=b.vy;
+    // wrap
+    if(b.y+b.r<0){b.y=H+b.r;b.x=40+rnd(W-80);}
+    if(b.x-b.r<0)b.x=b.r;
+    if(b.x+b.r>W)b.x=W-b.r;
+
+    let ox=0,oy=0;
+    if(b.shake>0){ox=(Math.random()-0.5)*8;oy=(Math.random()-0.5)*8;b.shake--;}
+
+    const cx=b.x+ox,cy=b.y+oy;
+
+    // glow for selected
+    if(b.selected){ctx.shadowColor='#fff';ctx.shadowBlur=20;}
+    else{ctx.shadowBlur=0;}
+
+    // bubble body
+    ctx.globalAlpha=0.92;
+    ctx.fillStyle=b.col;ctx.beginPath();ctx.arc(cx,cy,b.r,0,Math.PI*2);ctx.fill();
+
+    // gloss
+    ctx.globalAlpha=0.18;ctx.fillStyle='#fff';
+    ctx.beginPath();ctx.arc(cx-b.r*0.28,cy-b.r*0.32,b.r*0.38,0,Math.PI*2);ctx.fill();
+    ctx.globalAlpha=1;ctx.shadowBlur=0;
+
+    // ring if selected
+    if(b.selected){ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.beginPath();ctx.arc(cx,cy,b.r+5,0,Math.PI*2);ctx.stroke();}
+
+    // number or ?
+    const isMissing=b.type==='missing';
+    ctx.fillStyle='#fff';
+    const fs=isMissing?Math.round(b.r*0.72):b.val>=10?Math.round(b.r*0.62):Math.round(b.r*0.8);
+    ctx.font=`bold ${fs}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(isMissing?'?':b.val,cx,cy);
+  });
+
+  // Pop ring animations
+  popAnim=popAnim.filter(p=>p.alpha>0.05);
+  popAnim.forEach(p=>{
+    ctx.strokeStyle=p.color;ctx.lineWidth=3;ctx.globalAlpha=p.alpha;
+    ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.stroke();
+    p.r+=4;p.alpha-=0.06;
+  });
+  ctx.globalAlpha=1;
+
+  // Particles
+  particles=particles.filter(p=>p.alpha>0.05);
+  particles.forEach(p=>{
+    ctx.globalAlpha=p.alpha;ctx.fillStyle=p.color;
+    ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();
+    p.x+=p.vx;p.y+=p.vy;p.vy+=0.15;p.alpha-=0.025;
+  });
+  ctx.globalAlpha=1;
+
+  // Instruction hint
+  if(selectedIdx===-1&&state==='playing'){
+    ctx.fillStyle='rgba(255,255,255,0.25)';ctx.font='13px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText('Tap a bubble to select it, then tap its partner!',W/2,H-14);
+  } else if(selectedIdx!==-1){
+    ctx.fillStyle='rgba(255,255,255,0.55)';ctx.font='13px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText('Now tap the matching bubble!',W/2,H-14);
+  }
+
+  if(state==='levelup'||state==='win'){
+    ctx.fillStyle='rgba(0,0,0,0.65)';ctx.fillRect(0,0,W,H);
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.font='bold 48px sans-serif';ctx.fillStyle='#FFD700';
+    ctx.fillText(state==='win'?'You Win! 🎉':'Level Up! ⭐',W/2,H/2-42);
+    ctx.font='22px sans-serif';ctx.fillStyle='#fff';
+    ctx.fillText(state==='win'?`Score: ${score}  Errors: ${errors}`:'Amazing number bonds!',W/2,H/2+14);
+    ctx.font='17px sans-serif';ctx.fillStyle='#FFD700';
+    ctx.fillText('Tap to continue →',W/2,H/2+58);
+  }
+}
+
+canvas.addEventListener('click',e=>{const r=canvas.getBoundingClientRect();handleTap((e.clientX-r.left)*(W/r.width),(e.clientY-r.top)*(H/r.height));});
+canvas.addEventListener('touchstart',e=>{e.preventDefault();const r=canvas.getBoundingClientRect();handleTap((e.touches[0].clientX-r.left)*(W/r.width),(e.touches[0].clientY-r.top)*(H/r.height));},{passive:false});
+
+function loop(){draw();requestAnimationFrame(loop);}
+makeLevel(0);requestAnimationFrame(loop);
+</script>
+</body>
+</html>

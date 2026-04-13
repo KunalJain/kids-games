@@ -105,6 +105,23 @@ a { text-decoration: none; color: inherit; }
 .card-beast  .play-btn { background: #9B59B6; color: #fff; }
 .card-beast  .badge { background: rgba(155,89,182,0.2); color: #d4a8f0; }
 
+/* Beast Academy new games */
+.card-bond    { border-color: rgba(0,188,212,0.4); }
+.card-bond    .play-btn { background: #00BCD4; color: #fff; }
+.card-bond    .badge    { background: rgba(0,188,212,0.2); color: #80DEEA; }
+
+.card-palace  { border-color: rgba(255,152,0,0.4); }
+.card-palace  .play-btn { background: #FF9800; color: #3a1800; }
+.card-palace  .badge    { background: rgba(255,152,0,0.2); color: #FFCC80; }
+
+.card-safari  { border-color: rgba(139,195,74,0.4); }
+.card-safari  .play-btn { background: #8BC34A; color: #1a2e00; }
+.card-safari  .badge    { background: rgba(139,195,74,0.2); color: #DCEDC8; }
+
+.card-balance { border-color: rgba(63,81,181,0.4); }
+.card-balance .play-btn { background: #3F51B5; color: #fff; }
+.card-balance .badge    { background: rgba(63,81,181,0.2); color: #9FA8DA; }
+
 /* ── In-game back button ── */
 .back-btn {
   display: inline-flex;

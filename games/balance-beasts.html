@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Balance Beasts</title>
+<link rel="stylesheet" href="../style.css">
+<style>
+  body{display:flex;flex-direction:column;align-items:center;}
+  #canvas{border-radius:14px;display:block;max-width:100%;cursor:pointer;}
+  #ui{display:flex;gap:16px;font-size:15px;font-weight:600;padding:0.5rem 0;align-items:center;flex-wrap:wrap;justify-content:center;}
+  #msg{font-size:14px;color:rgba(255,255,255,0.5);padding-bottom:0.5rem;}
+</style>
+</head>
+<body>
+<div class="game-header">
+  <a href="../index.html" class="back-btn">← Back</a>
+  <h1>⚖️ Balance Beasts</h1>
+</div>
+<div id="ui">
+  <span>⭐ Lvl <span id="lvlEl">1</span></span>
+  <span>💯 Score: <span id="scoreEl">0</span></span>
+  <span>❌ Errors: <span id="errEl">0</span></span>
+</div>
+<canvas id="canvas" width="520" height="520"></canvas>
+<div id="msg">Tap the number that balances the scale!</div>
+
+<script>
+const canvas=document.getElementById('canvas'),ctx=canvas.getContext('2d'),W=520,H=520;
+
+const THEMES=[
+  {bg:'#e8eaf6',beam:'#3949ab',pan:'#fff',panStroke:'#5c6bc0',base:'#283593',wBg:'#e8eaf6',wBd:'#5c6bc0'},
+  {bg:'#e0f2f1',beam:'#00695c',pan:'#fff',panStroke:'#00897b',base:'#004d40',wBg:'#e0f2f1',wBd:'#00897b'},
+  {bg:'#fff3e0',beam:'#bf360c',pan:'#fff',panStroke:'#e64a19',base:'#870000',wBg:'#fff3e0',wBd:'#e64a19'},
+  {bg:'#f3e5f5',beam:'#6a1b9a',pan:'#fff',panStroke:'#8e24aa',base:'#4a148c',wBg:'#f3e5f5',wBd:'#8e24aa'},
+];
+const LEVELS=[
+  {label:'Copy the number',ops:['copy'],questionsToWin:4},
+  {label:'Add it up!',ops:['add'],questionsToWin:4},
+  {label:'Find the difference',ops:['sub'],questionsToWin:4},
+  {label:'Missing number',ops:['missing'],questionsToWin:4},
+];
+const PCOLS=['#FFD700','#FF6B6B','#4FC3F7','#A5D6A7','#CE93D8','#FFCC80'];
+
+// Scale geometry
+const FY=155, BL=155, ROPE=82, PANR=38;
+// Weight circles (4, evenly spaced)
+const WRADIUS=32, WY=400;
+const WXS=[134,218,302,386];
+
+let lvlIdx=0,score=0,errors=0,state='playing';
+let question=null,questionsLeft=0;
+let beamAngle=-0.17,beamTarget=-0.17,celebrated=false;
+let shakeIdx=-1,shakeTick=0,selectedAnswer=null,particles=[];
+
+function rnd(n){return Math.floor(Math.random()*n);}
+function rndBetween(a,b){return a+rnd(b-a+1);}
+
+function makeQuestion(li){
+  const op=LEVELS[li].ops[rnd(LEVELS[li].ops.length)];
+  let text,answer;
+  if(op==='copy'){
+    answer=rndBetween(1,10);text=`${answer}`;
+  } else if(op==='add'){
+    const a=rndBetween(1,9),b=rndBetween(1,9);answer=a+b;text=`${a} + ${b}`;
+  } else if(op==='sub'){
+    const b=rndBetween(1,9),a=rndBetween(b+2,b+11);answer=a-b;text=`${a} − ${b}`;
+  } else {
+    // missing addend: A + __ = C
+    const c=rndBetween(6,18),a=rndBetween(1,c-2);answer=c-a;text=`${a} + __ = ${c}`;
+  }
+  const choices=[answer];
+  while(choices.length<4){const w=answer+rndBetween(-5,5);if(w>0&&w!==answer&&!choices.includes(w))choices.push(w);}
+  for(let i=choices.length-1;i>0;i--){const j=rnd(i+1);[choices[i],choices[j]]=[choices[j],choices[i]];}
+  return{text,answer,choices};
+}
+
+function nextQuestion(){
+  question=makeQuestion(lvlIdx);
+  beamAngle=-0.17;beamTarget=-0.17;celebrated=false;
+  selectedAnswer=null;shakeIdx=-1;shakeTick=0;state='playing';
+}
+
+function makeLevel(li){
+  questionsLeft=LEVELS[li].questionsToWin;particles=[];
+  document.getElementById('lvlEl').textContent=li+1;
+  document.getElementById('scoreEl').textContent=score;
+  document.getElementById('errEl').textContent=errors;
+  nextQuestion();
+}
+
+// Rotate local point (lx,ly) around (W/2, FY) by angle
+function panWorld(side,angle){
+  const lx=side*BL,ly=ROPE;
+  return{x:W/2+lx*Math.cos(angle)-ly*Math.sin(angle),y:FY+lx*Math.sin(angle)+ly*Math.cos(angle)};
+}
+
+function spawnParticles(x,y){
+  for(let i=0;i<14;i++){
+    const a=Math.random()*Math.PI*2,sp=2.5+Math.random()*4;
+    particles.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-2,r:3+Math.random()*5,alpha:1,color:PCOLS[rnd(PCOLS.length)]});
+  }
+}
+
+function handleTap(x,y){
+  if(state==='levelup'){if(lvlIdx<LEVELS.length-1){lvlIdx++;makeLevel(lvlIdx);}return;}
+  if(state==='win'){lvlIdx=0;score=0;errors=0;makeLevel(0);return;}
+  if(state!=='playing')return;
+
+  question.choices.forEach((val,i)=>{
+    const dx=x-WXS[i],dy=y-WY;
+    if(dx*dx+dy*dy<=WRADIUS*WRADIUS){
+      if(val===question.answer){
+        score+=15;document.getElementById('scoreEl').textContent=score;
+        selectedAnswer=val;state='correct';beamTarget=0;celebrated=false;
+        setTimeout(()=>{
+          questionsLeft--;
+          if(questionsLeft<=0)state=lvlIdx>=LEVELS.length-1?'win':'levelup';
+          else nextQuestion();
+        },1400);
+      } else {
+        errors++;document.getElementById('errEl').textContent=errors;
+        shakeIdx=i;shakeTick=10;
+        state='wrong';beamTarget=-0.26;
+        setTimeout(()=>{beamTarget=-0.17;setTimeout(()=>{if(state==='wrong')state='playing';},420);},340);
+      }
+    }
+  });
+}
+
+function draw(){
+  const th=THEMES[lvlIdx%THEMES.length];
+  ctx.fillStyle=th.bg;ctx.fillRect(0,0,W,H);
+
+  // Header
+  ctx.fillStyle='rgba(0,0,0,0.08)';ctx.fillRect(0,0,W,62);
+  ctx.fillStyle='#1a1a1a';ctx.font='bold 18px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(LEVELS[lvlIdx].label,W/2,22);
+  const qNum=LEVELS[lvlIdx].questionsToWin-questionsLeft+1;
+  ctx.fillStyle='#555';ctx.font='13px sans-serif';
+  ctx.fillText(`Question ${qNum} of ${LEVELS[lvlIdx].questionsToWin}`,W/2,44);
+
+  // Smooth beam swing
+  beamAngle+=(beamTarget-beamAngle)*0.09;
+
+  // Detect balance reached for particle burst
+  if(state==='correct'&&!celebrated&&Math.abs(beamAngle)<0.025){
+    celebrated=true;
+    const lp=panWorld(-1,beamAngle),rp=panWorld(1,beamAngle);
+    spawnParticles(lp.x,lp.y);spawnParticles(rp.x,rp.y);
+    spawnParticles(W/2,FY);
+  }
+
+  const lp=panWorld(-1,beamAngle),rp=panWorld(1,beamAngle);
+
+  // Scale base and post
+  ctx.fillStyle=th.base;
+  ctx.beginPath();ctx.roundRect(W/2-6,FY-2,12,40,4);ctx.fill();
+  ctx.beginPath();ctx.roundRect(W/2-32,FY+36,64,14,6);ctx.fill();
+
+  // Beam (rotated)
+  ctx.save();ctx.translate(W/2,FY);ctx.rotate(beamAngle);
+  ctx.fillStyle=th.beam;
+  ctx.beginPath();ctx.roundRect(-BL,-7,BL*2,14,7);ctx.fill();
+  // Pivot circle
+  ctx.fillStyle=th.base;ctx.beginPath();ctx.arc(0,0,10,0,Math.PI*2);ctx.fill();
+  ctx.restore();
+
+  // Ropes
+  const lbx=W/2-BL*Math.cos(beamAngle),lby=FY-BL*Math.sin(beamAngle);
+  const rbx=W/2+BL*Math.cos(beamAngle),rby=FY+BL*Math.sin(beamAngle);
+  ctx.strokeStyle=th.beam;ctx.lineWidth=2.5;
+  ctx.beginPath();ctx.moveTo(lbx,lby);ctx.lineTo(lp.x,lp.y);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(rbx,rby);ctx.lineTo(rp.x,rp.y);ctx.stroke();
+
+  // Left pan
+  ctx.fillStyle=th.pan;ctx.strokeStyle=th.panStroke;ctx.lineWidth=3;
+  ctx.beginPath();ctx.arc(lp.x,lp.y,PANR,0,Math.PI*2);ctx.fill();ctx.stroke();
+  if(question){
+    const t=question.text;
+    const fs=t.length>=10?13:t.length>=7?15:t.length>=5?17:21;
+    ctx.fillStyle='#1a1a1a';ctx.font=`bold ${fs}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(t,lp.x,lp.y);
+  }
+
+  // Right pan
+  ctx.fillStyle=th.pan;ctx.strokeStyle=th.panStroke;ctx.lineWidth=3;
+  ctx.beginPath();ctx.arc(rp.x,rp.y,PANR,0,Math.PI*2);ctx.fill();ctx.stroke();
+  if(question){
+    const disp=selectedAnswer!==null?`${selectedAnswer}`:'?';
+    ctx.fillStyle=selectedAnswer!==null?'#2e7d32':'#bbb';
+    ctx.font=`bold ${disp.length>2?20:26}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(disp,rp.x,rp.y);
+  }
+
+  // Weight choices
+  if(state==='playing'||state==='wrong'){
+    ctx.fillStyle='rgba(0,0,0,0.3)';ctx.font='12px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText('← Tap a weight to place it on the scale →',W/2,WY-WRADIUS-14);
+    question.choices.forEach((val,i)=>{
+      const shk=shakeIdx===i&&shakeTick>0;
+      const ox=shk?(Math.random()-0.5)*9:0;
+      if(shk)shakeTick--;
+      ctx.fillStyle=shk?'#ffebee':th.wBg;
+      ctx.strokeStyle=shk?'#e53935':th.wBd;ctx.lineWidth=2.5;
+      ctx.beginPath();ctx.arc(WXS[i]+ox,WY,WRADIUS,0,Math.PI*2);ctx.fill();ctx.stroke();
+      ctx.fillStyle='#1a1a1a';
+      ctx.font=`bold ${val>=10?20:24}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText(val,WXS[i]+ox,WY);
+    });
+  }
+
+  // Particles
+  particles=particles.filter(p=>p.alpha>0.05);
+  particles.forEach(p=>{
+    ctx.globalAlpha=p.alpha;ctx.fillStyle=p.color;
+    ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();
+    p.x+=p.vx;p.y+=p.vy;p.vy+=0.12;p.alpha-=0.022;
+  });
+  ctx.globalAlpha=1;
+
+  if(state==='levelup'||state==='win'){
+    ctx.fillStyle='rgba(0,0,0,0.62)';ctx.fillRect(0,0,W,H);
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.font='bold 48px sans-serif';ctx.fillStyle='#FFD700';
+    ctx.fillText(state==='win'?'You Win! 🎉':'Level Up! ⭐',W/2,H/2-42);
+    ctx.font='22px sans-serif';ctx.fillStyle='#fff';
+    ctx.fillText(state==='win'?`Score: ${score}  Errors: ${errors}`:'Perfect balance!',W/2,H/2+14);
+    ctx.font='17px sans-serif';ctx.fillStyle='#FFD700';
+    ctx.fillText('Tap to continue →',W/2,H/2+58);
+  }
+}
+
+canvas.addEventListener('click',e=>{const r=canvas.getBoundingClientRect();handleTap((e.clientX-r.left)*(W/r.width),(e.clientY-r.top)*(H/r.height));});
+canvas.addEventListener('touchstart',e=>{e.preventDefault();const r=canvas.getBoundingClientRect();handleTap((e.touches[0].clientX-r.left)*(W/r.width),(e.touches[0].clientY-r.top)*(H/r.height));},{passive:false});
+
+function loop(){draw();requestAnimationFrame(loop);}
+makeLevel(0);requestAnimationFrame(loop);
+</script>
+</body>
+</html>

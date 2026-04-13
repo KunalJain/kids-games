@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Skip Count Safari</title>
+<link rel="stylesheet" href="../style.css">
+<style>
+  body{display:flex;flex-direction:column;align-items:center;}
+  #canvas{border-radius:14px;display:block;max-width:100%;cursor:pointer;}
+  #ui{display:flex;gap:16px;font-size:15px;font-weight:600;padding:0.5rem 0;align-items:center;flex-wrap:wrap;justify-content:center;}
+  #msg{font-size:14px;color:rgba(255,255,255,0.5);padding-bottom:0.5rem;}
+</style>
+</head>
+<body>
+<div class="game-header">
+  <a href="../index.html" class="back-btn">← Back</a>
+  <h1>🦒 Skip Count Safari</h1>
+</div>
+<div id="ui">
+  <span>⭐ Lvl <span id="lvlEl">1</span></span>
+  <span>💯 Score: <span id="scoreEl">0</span></span>
+  <span>❌ Errors: <span id="errEl">0</span></span>
+</div>
+<canvas id="canvas" width="520" height="520"></canvas>
+<div id="msg">Tap the answer button to fill in the missing stone!</div>
+
+<script>
+const canvas=document.getElementById('canvas'),ctx=canvas.getContext('2d'),W=520,H=520;
+
+const THEMES=[
+  {bg:'#e8f5e9',filled:'#43a047',trail:'#66bb6a',cBg:'#f1f8e9',cBd:'#66bb6a'},
+  {bg:'#fff3e0',filled:'#ef6c00',trail:'#ffa726',cBg:'#fff8e1',cBd:'#ffa726'},
+  {bg:'#e3f2fd',filled:'#1565c0',trail:'#42a5f5',cBg:'#e3f2fd',cBd:'#42a5f5'},
+  {bg:'#fce4ec',filled:'#c2185b',trail:'#f06292',cBg:'#fce4ec',cBd:'#f06292'},
+];
+const LEVELS=[
+  {skip:2, dir:1,  blanks:1,count:7,label:'Count by 2s',rounds:3},
+  {skip:5, dir:1,  blanks:2,count:8,label:'Count by 5s',rounds:3},
+  {skip:10,dir:null,blanks:2,count:8,label:'Count by 10s',rounds:3},
+  {skip:null,dir:null,blanks:3,count:9,label:'Mixed!',rounds:3},
+];
+const ANIMALS=['🦒','🦓','🐘','🦁','🐆'];
+const PCOLS=['#FFD700','#43A047','#1565C0','#C2185B','#FF9800','#9C27B0'];
+
+let lvlIdx=0,score=0,errors=0,state='playing',roundsLeft=3;
+let stones=[],activeBlank=null,choices=[],currentSkip=2,currentDir=1;
+let shakeChoice=-1,shakeTick=0,flashIdx=-1,flashTick=0,particles=[];
+
+function rnd(n){return Math.floor(Math.random()*n);}
+
+function makeSequence(li){
+  const cfg=LEVELS[li];
+  const skip=cfg.skip!==null?cfg.skip:[2,5,10,100][rnd(4)];
+  const dir=cfg.dir!==null?cfg.dir:(Math.random()<0.5?1:-1);
+  currentSkip=skip; currentDir=dir;
+  const base=skip*(rnd(4)+1);
+  const start=dir===1?base:base+skip*(cfg.count-1);
+  const values=Array.from({length:cfg.count},(_,i)=>start+dir*skip*i);
+  const pool=Array.from({length:cfg.count-2},(_,i)=>i+1);
+  for(let i=pool.length-1;i>0;i--){const j=rnd(i+1);[pool[i],pool[j]]=[pool[j],pool[i]];}
+  return{values,blanks:pool.slice(0,cfg.blanks)};
+}
+
+function stoneLayout(n){
+  if(n<=7){
+    const R=28,step=70,tw=n*56+(n-1)*14,sx=(W-tw)/2+R;
+    return{R,pos:Array.from({length:n},(_,i)=>({x:sx+i*step,y:190}))};
+  } else if(n===8){
+    const R=26,step=66,tw=4*52+3*14,sx=(W-tw)/2+R;
+    return{R,pos:[...Array.from({length:4},(_,i)=>({x:sx+i*step,y:152})),...Array.from({length:4},(_,i)=>({x:sx+i*step,y:242}))]};
+  } else {
+    const R=24,step=60;
+    const tw5=5*48+4*12,sx5=(W-tw5)/2+R;
+    const tw4=4*48+3*12,sx4=(W-tw4)/2+R;
+    return{R,pos:[...Array.from({length:5},(_,i)=>({x:sx5+i*step,y:148})),...Array.from({length:4},(_,i)=>({x:sx4+i*step,y:238}))]};
+  }
+}
+
+function makeChoices(answer,skip){
+  const pool=[];
+  for(let d=-5;d<=5;d++){if(d===0)continue;const w=answer+d*skip;if(w>0&&!pool.includes(w))pool.push(w);}
+  for(let i=pool.length-1;i>0;i--){const j=rnd(i+1);[pool[i],pool[j]]=[pool[j],pool[i]];}
+  const res=[answer,...pool.slice(0,3)];
+  for(let i=res.length-1;i>0;i--){const j=rnd(i+1);[res[i],res[j]]=[res[j],res[i]];}
+  return res;
+}
+
+function makeLevel(li){
+  const seq=makeSequence(li);
+  const layout=stoneLayout(seq.values.length);
+  stones=seq.values.map((v,i)=>({x:layout.pos[i].x,y:layout.pos[i].y,R:layout.R,value:v,isBlank:seq.blanks.includes(i),filled:false}));
+  activeBlank=null;flashIdx=-1;flashTick=0;shakeChoice=-1;shakeTick=0;particles=[];
+  activateNext();
+  document.getElementById('lvlEl').textContent=li+1;
+  document.getElementById('scoreEl').textContent=score;
+  document.getElementById('errEl').textContent=errors;
+}
+
+function activateNext(){
+  const next=stones.find(s=>s.isBlank&&!s.filled);
+  if(next){activeBlank=next;choices=makeChoices(activeBlank.value,currentSkip);}
+  else{
+    activeBlank=null;roundsLeft--;
+    if(roundsLeft<=0)setTimeout(()=>{state=lvlIdx>=LEVELS.length-1?'win':'levelup';},700);
+    else setTimeout(()=>makeLevel(lvlIdx),500);
+  }
+}
+
+// Choice button geometry
+const CW=108,CH=52,CGAP=10,CTW=4*CW+3*CGAP,CSX=(W-CTW)/2,CY=408;
+function choiceRect(i){return{x:CSX+i*(CW+CGAP),y:CY,w:CW,h:CH};}
+
+function spawnParticles(x,y){
+  for(let i=0;i<14;i++){
+    const a=Math.random()*Math.PI*2,sp=2+Math.random()*4;
+    particles.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-1,r:3+Math.random()*4,alpha:1,color:PCOLS[rnd(PCOLS.length)]});
+  }
+}
+
+function drawTrail(th){
+  // group stones into rows by y proximity
+  const rows=[];let row=[];
+  stones.forEach((s,i)=>{
+    if(i>0&&Math.abs(s.y-stones[i-1].y)>30){rows.push([...row]);row=[];}
+    row.push(s);
+  });
+  rows.push(row);
+  ctx.strokeStyle=th.trail;ctx.lineWidth=5;ctx.lineCap='round';ctx.setLineDash([8,7]);
+  rows.forEach(r=>{if(r.length<2)return;ctx.beginPath();r.forEach((s,i)=>i===0?ctx.moveTo(s.x,s.y):ctx.lineTo(s.x,s.y));ctx.stroke();});
+  if(rows.length===2&&rows[0].length>0&&rows[1].length>0){
+    const f=rows[0][rows[0].length-1],t=rows[1][0];
+    ctx.beginPath();ctx.moveTo(f.x,f.y);ctx.bezierCurveTo(f.x+40,f.y+50,t.x-40,t.y-50,t.x,t.y);ctx.stroke();
+  }
+  ctx.setLineDash([]);
+}
+
+function draw(){
+  const th=THEMES[lvlIdx%THEMES.length],cfg=LEVELS[lvlIdx];
+  ctx.fillStyle=th.bg;ctx.fillRect(0,0,W,H);
+
+  // Header
+  ctx.fillStyle='rgba(0,0,0,0.1)';ctx.fillRect(0,0,W,62);
+  const arrow=currentDir===1?'→':'←';
+  const hdr=cfg.skip!==null?`Count by ${currentSkip}s ${arrow}`:`Count by ${currentSkip}s ${arrow}`;
+  ctx.fillStyle='#1a1a1a';ctx.font='bold 19px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(hdr,W/2,25);
+  const total=LEVELS[lvlIdx].rounds,done=total-roundsLeft;
+  ctx.font='13px sans-serif';ctx.fillStyle='#555';
+  ctx.fillText(`Round ${done+1} of ${total}`,W/2,46);
+
+  drawTrail(th);
+
+  const tick=Date.now()/600;
+  stones.forEach((s,idx)=>{
+    const isActive=s===activeBlank;
+    const isFlash=flashIdx===idx&&flashTick>0;
+    if(isFlash)flashTick--;
+    if(s.isBlank&&!s.filled){
+      const pulse=isActive?Math.sin(tick*1.8)*3:0;
+      ctx.shadowColor=isActive?'#ff9800':'transparent';ctx.shadowBlur=isActive?16:0;
+      ctx.fillStyle=isFlash?'#c8e6c9':'#fffde7';
+      ctx.strokeStyle=isActive?'#f57c00':'#bdbdbd';ctx.lineWidth=isActive?3:1.5;
+      ctx.beginPath();ctx.arc(s.x,s.y,s.R+pulse,0,Math.PI*2);ctx.fill();ctx.stroke();
+      ctx.shadowBlur=0;
+      if(!isFlash){ctx.fillStyle=isActive?'#e65100':'#9e9e9e';ctx.font=`bold ${Math.round(s.R*0.82)}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('?',s.x,s.y);}
+    } else {
+      ctx.shadowBlur=0;
+      ctx.fillStyle=isFlash?'#a5d6a7':th.filled;
+      ctx.strokeStyle=isFlash?'#2e7d32':th.trail;ctx.lineWidth=2;
+      ctx.beginPath();ctx.arc(s.x,s.y,s.R,0,Math.PI*2);ctx.fill();ctx.stroke();
+      ctx.fillStyle='#fff';
+      const fs=s.value>=100?Math.round(s.R*0.55):s.value>=10?Math.round(s.R*0.72):Math.round(s.R*0.84);
+      ctx.font=`bold ${fs}px sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText(s.value,s.x,s.y);
+    }
+  });
+
+  // Animal
+  ctx.shadowBlur=0;ctx.font='40px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(ANIMALS[lvlIdx%ANIMALS.length],W/2,350);
+
+  // Choice buttons
+  if(activeBlank&&state==='playing'){
+    choices.forEach((val,i)=>{
+      const r=choiceRect(i);
+      const shk=shakeChoice===i&&shakeTick>0;
+      const ox=shk?(Math.random()-0.5)*10:0;
+      if(shk)shakeTick--;
+      ctx.fillStyle=th.cBg;ctx.strokeStyle=th.cBd;ctx.lineWidth=2.5;
+      ctx.beginPath();ctx.roundRect(r.x+ox,r.y,r.w,r.h,12);ctx.fill();ctx.stroke();
+      ctx.fillStyle='#1a1a1a';ctx.font='bold 20px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText(val,r.x+r.w/2+ox,r.y+r.h/2);
+    });
+    // label above choices
+    ctx.fillStyle='rgba(0,0,0,0.45)';ctx.font='13px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText('What comes next?',W/2,CY-14);
+  }
+
+  // Particles
+  particles=particles.filter(p=>p.alpha>0.05);
+  particles.forEach(p=>{ctx.globalAlpha=p.alpha;ctx.fillStyle=p.color;ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fill();p.x+=p.vx;p.y+=p.vy;p.vy+=0.12;p.alpha-=0.03;});
+  ctx.globalAlpha=1;
+
+  if(state==='levelup'||state==='win'){
+    ctx.fillStyle='rgba(0,0,0,0.62)';ctx.fillRect(0,0,W,H);
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.font='bold 48px sans-serif';ctx.fillStyle='#FFD700';
+    ctx.fillText(state==='win'?'You Win! 🎉':'Level Up! ⭐',W/2,H/2-42);
+    ctx.font='22px sans-serif';ctx.fillStyle='#fff';
+    ctx.fillText(state==='win'?`Score: ${score}  Errors: ${errors}`:'Great counting!',W/2,H/2+14);
+    ctx.font='17px sans-serif';ctx.fillStyle='#FFD700';
+    ctx.fillText('Tap to continue →',W/2,H/2+58);
+  }
+}
+
+function handleTap(x,y){
+  if(state==='levelup'){if(lvlIdx<LEVELS.length-1){lvlIdx++;roundsLeft=LEVELS[lvlIdx].rounds;makeLevel(lvlIdx);}return;}
+  if(state==='win'){lvlIdx=0;score=0;errors=0;roundsLeft=LEVELS[0].rounds;makeLevel(0);return;}
+  if(!activeBlank)return;
+  choices.forEach((val,i)=>{
+    const r=choiceRect(i);
+    if(x>=r.x&&x<=r.x+r.w&&y>=r.y&&y<=r.y+r.h){
+      if(val===activeBlank.value){
+        score+=10;document.getElementById('scoreEl').textContent=score;
+        flashIdx=stones.indexOf(activeBlank);flashTick=22;
+        spawnParticles(activeBlank.x,activeBlank.y);
+        activeBlank.filled=true;activateNext();
+      } else {
+        errors++;document.getElementById('errEl').textContent=errors;
+        shakeChoice=i;shakeTick=10;
+      }
+    }
+  });
+}
+
+canvas.addEventListener('click',e=>{const r=canvas.getBoundingClientRect();handleTap((e.clientX-r.left)*(W/r.width),(e.clientY-r.top)*(H/r.height));});
+canvas.addEventListener('touchstart',e=>{e.preventDefault();const r=canvas.getBoundingClientRect();handleTap((e.touches[0].clientX-r.left)*(W/r.width),(e.touches[0].clientY-r.top)*(H/r.height));},{passive:false});
+
+function loop(){draw();requestAnimationFrame(loop);}
+roundsLeft=LEVELS[0].rounds;makeLevel(0);requestAnimationFrame(loop);
+</script>
+</body>
+</html>
