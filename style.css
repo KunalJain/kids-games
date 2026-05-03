@@ -127,6 +127,11 @@ a { text-decoration: none; color: inherit; }
 .card-rocket  .play-btn { background: #00E676; color: #00251a; }
 .card-rocket  .badge    { background: rgba(0,230,118,0.2); color: #69F0AE; }
 
+/* Word Wizard — magenta/magic */
+.card-wizard  { border-color: rgba(233,30,99,0.4); }
+.card-wizard  .play-btn { background: #E91E63; color: #fff; }
+.card-wizard  .badge    { background: rgba(233,30,99,0.2); color: #F8BBD0; }
+
 /* ── In-game back button ── */
 .back-btn {
   display: inline-flex;

@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Word Wizard</title>
+<link rel="stylesheet" href="../style.css">
+<style>
+  body{display:flex;flex-direction:column;align-items:center;}
+  #wrap{width:min(560px,96vw);padding:0 8px 24px;}
+  #ui{display:flex;gap:14px;font-size:15px;font-weight:600;padding:0.4rem 0 0.8rem;align-items:center;flex-wrap:wrap;justify-content:center;}
+  #ui .pill{background:rgba(255,255,255,0.07);padding:6px 12px;border-radius:999px;}
+  #levelLabel{color:#F8BBD0;font-weight:700;}
+
+  /* Stone path */
+  #pathWrap{position:relative;padding:42px 0 16px;}
+  #wizard{position:absolute;top:0;font-size:34px;transition:left 0.45s cubic-bezier(.5,1.6,.5,1);transform:translateX(-50%);pointer-events:none;filter:drop-shadow(0 4px 6px rgba(0,0,0,0.4));}
+  #stones{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;}
+  .stone{
+    width:56px;height:64px;border-radius:14px;
+    background:rgba(255,255,255,0.05);
+    border:2px solid rgba(255,255,255,0.12);
+    display:flex;align-items:center;justify-content:center;
+    font-size:28px;font-weight:800;color:rgba(255,255,255,0.25);
+    transition:all 0.25s;
+    position:relative;
+  }
+  .stone.solved{
+    background:linear-gradient(140deg,#E91E63 0%,#9C27B0 100%);
+    border-color:#F8BBD0;color:#fff;
+    box-shadow:0 0 18px rgba(233,30,99,0.5);
+  }
+  .stone.active{
+    border-color:#FFD54F;
+    box-shadow:0 0 22px rgba(255,213,79,0.6);
+    animation:pulse 1.2s ease-in-out infinite;
+  }
+  .stone.shake{animation:shake 0.4s;}
+  @keyframes pulse{
+    0%,100%{transform:translateY(0);}
+    50%{transform:translateY(-3px);}
+  }
+  @keyframes shake{
+    0%,100%{transform:translateX(0);}
+    25%{transform:translateX(-6px);}
+    75%{transform:translateX(6px);}
+  }
+
+  /* Math card */
+  #mathCard{
+    background:linear-gradient(135deg,rgba(233,30,99,0.15),rgba(156,39,176,0.15));
+    border:1px solid rgba(248,187,208,0.3);
+    border-radius:18px;padding:22px 16px;margin:18px 0;
+    text-align:center;
+  }
+  #equation{font-size:42px;font-weight:800;letter-spacing:2px;color:#fff;}
+  #hint{font-size:13px;color:rgba(255,255,255,0.45);margin-top:6px;}
+
+  /* Answer buttons */
+  #answers{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;}
+  .ans-btn{
+    padding:18px;font-size:24px;font-weight:800;
+    background:rgba(255,255,255,0.06);
+    border:2px solid rgba(255,255,255,0.15);
+    border-radius:14px;color:#fff;cursor:pointer;
+    transition:all 0.15s;font-family:inherit;
+  }
+  .ans-btn:hover:not(:disabled){background:rgba(248,187,208,0.15);border-color:#F8BBD0;}
+  .ans-btn:active:not(:disabled){transform:scale(0.96);}
+  .ans-btn.correct{background:#4CAF50;border-color:#A5D6A7;animation:pop 0.4s;}
+  .ans-btn.wrong{background:#F44336;border-color:#FFCDD2;}
+  .ans-btn:disabled{cursor:not-allowed;opacity:0.6;}
+  @keyframes pop{
+    0%,100%{transform:scale(1);}
+    50%{transform:scale(1.08);}
+  }
+
+  /* Win banner */
+  #banner{
+    text-align:center;padding:24px 16px;
+    background:linear-gradient(135deg,#E91E63,#9C27B0);
+    border-radius:18px;margin:18px 0;
+    box-shadow:0 0 32px rgba(233,30,99,0.5);
+    animation:popIn 0.5s cubic-bezier(.5,1.7,.5,1);
+  }
+  #banner h2{font-size:28px;margin-bottom:6px;}
+  #banner p{color:rgba(255,255,255,0.85);margin-bottom:14px;}
+  #banner button{
+    padding:12px 28px;font-size:16px;font-weight:700;
+    background:#fff;color:#9C27B0;border:none;border-radius:12px;
+    cursor:pointer;font-family:inherit;
+  }
+  #banner button:hover{background:#F8BBD0;}
+  @keyframes popIn{
+    0%{transform:scale(0.7);opacity:0;}
+    100%{transform:scale(1);opacity:1;}
+  }
+  .hidden{display:none!important;}
+
+  /* Sparkles */
+  .sparkle{
+    position:absolute;font-size:16px;pointer-events:none;
+    animation:sparkleFly 0.9s ease-out forwards;
+  }
+  @keyframes sparkleFly{
+    0%{opacity:1;transform:translate(-50%,-50%) scale(0.5);}
+    100%{opacity:0;transform:translate(var(--tx),var(--ty)) scale(1.3);}
+  }
+</style>
+</head>
+<body>
+<div class="game-header">
+  <a href="../index.html" class="back-btn">← Back</a>
+  <h1>🧙 Word Wizard</h1>
+</div>
+<div id="wrap">
+  <div id="ui">
+    <span class="pill">⭐ <span id="lvlEl">1</span> · <span id="levelLabel">Add it up!</span></span>
+    <span class="pill">💯 <span id="scoreEl">0</span></span>
+    <span class="pill">❌ <span id="errEl">0</span></span>
+  </div>
+
+  <div id="pathWrap">
+    <div id="wizard">🧙</div>
+    <div id="stones"></div>
+  </div>
+
+  <div id="mathCard">
+    <div id="equation">2 + 3</div>
+    <div id="hint">Pick the number that makes the spell work!</div>
+  </div>
+
+  <div id="answers"></div>
+
+  <div id="banner" class="hidden">
+    <h2 id="bannerTitle">✨ Spell Cast! ✨</h2>
+    <p id="bannerWord">MAGIC</p>
+    <button id="nextBtn">Next Spell →</button>
+  </div>
+</div>
+
+<script>
+const LEVELS=[
+  {label:'Add it up!',  words:['CAT','SUN','HAT'],     op:'add', max:20},
+  {label:'Take away!',  words:['STAR','MOON','FROG'],  op:'sub', max:20},
+  {label:'Big numbers', words:['MAGIC','BRAVE','SPELL'], op:'add', max:50, twoDigit:true},
+  {label:'Wizard math', words:['WIZARD','POTION','CASTLE'], op:'mix', max:100, twoDigit:true},
+];
+
+const stonesEl=document.getElementById('stones');
+const wizardEl=document.getElementById('wizard');
+const pathWrap=document.getElementById('pathWrap');
+const equationEl=document.getElementById('equation');
+const answersEl=document.getElementById('answers');
+const bannerEl=document.getElementById('banner');
+const bannerTitle=document.getElementById('bannerTitle');
+const bannerWord=document.getElementById('bannerWord');
+const nextBtn=document.getElementById('nextBtn');
+const lvlEl=document.getElementById('lvlEl');
+const scoreEl=document.getElementById('scoreEl');
+const errEl=document.getElementById('errEl');
+const levelLabel=document.getElementById('levelLabel');
+
+let lvlIdx=0, score=0, errors=0;
+let word='', stoneIdx=0, current=null, locked=false;
+
+function rnd(n){return Math.floor(Math.random()*n);}
+function rndBetween(a,b){return a+rnd(b-a+1);}
+
+function makeQuestion(){
+  const L=LEVELS[lvlIdx];
+  let op = L.op==='mix' ? (Math.random()<0.5?'add':'sub') : L.op;
+  let a,b,answer,text;
+  if(op==='add'){
+    if(L.twoDigit){
+      a=rndBetween(10,L.max-10); b=rndBetween(5,L.max-a);
+    } else {
+      a=rndBetween(2,L.max-2); b=rndBetween(1,Math.min(9,L.max-a));
+    }
+    answer=a+b; text=`${a} + ${b}`;
+  } else {
+    if(L.twoDigit){
+      a=rndBetween(20,L.max); b=rndBetween(5,a-1);
+    } else {
+      a=rndBetween(5,L.max); b=rndBetween(1,a-1);
+    }
+    answer=a-b; text=`${a} − ${b}`;
+  }
+  const choices=[answer];
+  while(choices.length<4){
+    const w=answer+rndBetween(-5,5);
+    if(w>0 && !choices.includes(w)) choices.push(w);
+  }
+  for(let i=choices.length-1;i>0;i--){const j=rnd(i+1);[choices[i],choices[j]]=[choices[j],choices[i]];}
+  return {text,answer,choices};
+}
+
+function buildStones(){
+  stonesEl.innerHTML='';
+  for(let i=0;i<word.length;i++){
+    const s=document.createElement('div');
+    s.className='stone';
+    s.textContent='?';
+    stonesEl.appendChild(s);
+  }
+  positionWizard();
+}
+
+function positionWizard(){
+  requestAnimationFrame(()=>{
+    const stones=stonesEl.children;
+    if(stoneIdx>=stones.length){
+      // off the right edge celebrating
+      const last=stones[stones.length-1];
+      const r=last.getBoundingClientRect();
+      const pr=pathWrap.getBoundingClientRect();
+      wizardEl.style.left=(r.left-pr.left+r.width/2)+'px';
+      return;
+    }
+    const cur=stones[stoneIdx];
+    const r=cur.getBoundingClientRect();
+    const pr=pathWrap.getBoundingClientRect();
+    wizardEl.style.left=(r.left-pr.left+r.width/2)+'px';
+  });
+}
+
+function highlightActive(){
+  [...stonesEl.children].forEach((s,i)=>{
+    s.classList.toggle('active', i===stoneIdx && !s.classList.contains('solved'));
+  });
+}
+
+function nextQuestion(){
+  if(stoneIdx>=word.length){ winLevel(); return; }
+  current=makeQuestion();
+  equationEl.textContent=current.text+' = ?';
+  answersEl.innerHTML='';
+  current.choices.forEach(c=>{
+    const b=document.createElement('button');
+    b.className='ans-btn';
+    b.textContent=c;
+    b.onclick=()=>handleAnswer(b,c);
+    answersEl.appendChild(b);
+  });
+  highlightActive();
+  locked=false;
+}
+
+function handleAnswer(btn, val){
+  if(locked) return;
+  if(val===current.answer){
+    locked=true;
+    btn.classList.add('correct');
+    score++; scoreEl.textContent=score;
+    const stone=stonesEl.children[stoneIdx];
+    stone.textContent=word[stoneIdx];
+    stone.classList.add('solved');
+    stone.classList.remove('active');
+    burstSparkles(stone);
+    stoneIdx++;
+    setTimeout(()=>{
+      positionWizard();
+      setTimeout(nextQuestion, 500);
+    }, 350);
+  } else {
+    btn.classList.add('wrong');
+    btn.disabled=true;
+    errors++; errEl.textContent=errors;
+    const stone=stonesEl.children[stoneIdx];
+    stone.classList.add('shake');
+    setTimeout(()=>stone.classList.remove('shake'),400);
+  }
+}
+
+function burstSparkles(stone){
+  const r=stone.getBoundingClientRect();
+  const pr=pathWrap.getBoundingClientRect();
+  const cx=r.left-pr.left+r.width/2;
+  const cy=r.top-pr.top+r.height/2;
+  for(let i=0;i<8;i++){
+    const sp=document.createElement('span');
+    sp.className='sparkle';
+    sp.textContent=['✨','⭐','💫'][i%3];
+    sp.style.left=cx+'px';
+    sp.style.top=cy+'px';
+    const ang=Math.random()*Math.PI*2;
+    const d=40+Math.random()*40;
+    sp.style.setProperty('--tx',(Math.cos(ang)*d)+'px');
+    sp.style.setProperty('--ty',(Math.sin(ang)*d)+'px');
+    pathWrap.appendChild(sp);
+    setTimeout(()=>sp.remove(),900);
+  }
+}
+
+function winLevel(){
+  bannerWord.textContent='✨ '+word+' ✨';
+  if(lvlIdx===LEVELS.length-1){
+    bannerTitle.textContent='🏆 Master Wizard! 🏆';
+    nextBtn.textContent='Play Again';
+  } else {
+    bannerTitle.textContent='✨ Spell Cast! ✨';
+    nextBtn.textContent='Next Spell →';
+  }
+  bannerEl.classList.remove('hidden');
+  answersEl.innerHTML='';
+  equationEl.textContent='🎉';
+}
+
+nextBtn.onclick=()=>{
+  bannerEl.classList.add('hidden');
+  // advance: next word in this level, or next level
+  const L=LEVELS[lvlIdx];
+  const usedKey='wordIdx_'+lvlIdx;
+  let widx = (window[usedKey]||0)+1;
+  if(widx>=L.words.length){
+    widx=0;
+    lvlIdx=(lvlIdx+1)%LEVELS.length;
+    if(lvlIdx===0){ score=0; errors=0; scoreEl.textContent=0; errEl.textContent=0; }
+  }
+  window[usedKey]=widx;
+  startWord();
+};
+
+function startWord(){
+  const L=LEVELS[lvlIdx];
+  const widx = window['wordIdx_'+lvlIdx]||0;
+  word = L.words[widx];
+  stoneIdx=0;
+  lvlEl.textContent=lvlIdx+1;
+  levelLabel.textContent=L.label;
+  buildStones();
+  nextQuestion();
+}
+
+window.addEventListener('resize', positionWizard);
+startWord();
+</script>
+</body>
+</html>
