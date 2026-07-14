@@ -43,9 +43,11 @@
   #wordCard{
     background:linear-gradient(135deg,rgba(79,195,247,0.15),rgba(41,108,196,0.15));
     border:1px solid rgba(79,195,247,0.3);
-    border-radius:18px;padding:18px 12px;margin:16px 0 12px;text-align:center;
+    border-radius:18px;padding:16px 12px;margin:16px 0 12px;text-align:center;
   }
-  #action{font-size:14px;color:#4FC3F7;font-weight:700;letter-spacing:1px;margin-bottom:12px;text-transform:uppercase;}
+  #action{font-size:14px;color:#4FC3F7;font-weight:700;letter-spacing:1px;margin-bottom:8px;text-transform:uppercase;}
+  #clue{font-size:56px;line-height:1;}
+  #clueLabel{font-size:13px;color:rgba(255,255,255,0.45);margin:4px 0 12px;}
   #slots{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
   .slot{
     width:44px;height:54px;border-radius:12px;
@@ -56,6 +58,7 @@
   }
   .slot.next{border-color:#FFD54F;box-shadow:0 0 16px rgba(255,213,79,0.5);}
   .slot.done{background:linear-gradient(140deg,#29B6F6,#1976D2);border-color:#81D4FA;animation:pop 0.3s;}
+  .slot.hinted{background:linear-gradient(140deg,#FFB300,#FB8C00);border-color:#FFE082;}
   @keyframes pop{50%{transform:scale(1.15);}}
 
   /* Letter tiles */
@@ -72,6 +75,18 @@
   .tile.used{opacity:0.25;pointer-events:none;}
   .tile.shake{animation:shake 0.35s;border-color:#FF6B6B;}
   @keyframes shake{0%,100%{transform:translateX(0);}25%{transform:translateX(-6px);}75%{transform:translateX(6px);}}
+
+  /* Hint button */
+  #hintBtn{
+    display:block;margin:14px auto 0;padding:10px 22px;
+    font-size:15px;font-weight:700;font-family:inherit;
+    background:rgba(255,213,79,0.15);
+    border:2px solid rgba(255,213,79,0.5);
+    border-radius:12px;color:#FFD54F;cursor:pointer;transition:background 0.15s;
+  }
+  #hintBtn:hover:not(:disabled){background:rgba(255,213,79,0.28);}
+  #hintBtn:active:not(:disabled){transform:scale(0.96);}
+  #hintBtn:disabled{opacity:0.35;cursor:not-allowed;}
 
   #banner{
     text-align:center;padding:22px 16px;
@@ -107,10 +122,13 @@
 
   <div id="wordCard">
     <div id="action">✈️ Spell to FLY!</div>
+    <div id="clue">🐱</div>
+    <div id="clueLabel">What is this? Spell it!</div>
     <div id="slots"></div>
   </div>
 
   <div id="tiles"></div>
+  <button id="hintBtn">💡 Hint (2)</button>
 
   <div id="banner" class="hidden">
     <h2 id="bannerTitle">🎉 Level Clear! 🎉</h2>
@@ -121,17 +139,25 @@
 
 <script>
 const LEVELS=[
-  {label:'Take Off!',  words:['CAT','SUN','JET','FLY','SKY']},
-  {label:'Up We Go!',  words:['STAR','ZOOM','WING','FAST','BLUE']},
-  {label:'Sky High!',  words:['CLOUD','ROCKET','FLYING','PILOT']},
-  {label:'Ace Pilot!', words:['ROCKET','BALLOON','JETPACK','RUNWAY']},
+  {label:'Take Off!', words:[
+    {w:'CAT',e:'🐱'},{w:'SUN',e:'☀️'},{w:'JET',e:'✈️'},{w:'DOG',e:'🐶'},{w:'BUS',e:'🚌'}]},
+  {label:'Up We Go!', words:[
+    {w:'STAR',e:'⭐'},{w:'FROG',e:'🐸'},{w:'FISH',e:'🐟'},{w:'BIRD',e:'🐦'},{w:'CAKE',e:'🎂'}]},
+  {label:'Sky High!', words:[
+    {w:'CLOUD',e:'☁️'},{w:'TIGER',e:'🐯'},{w:'APPLE',e:'🍎'},{w:'TRAIN',e:'🚂'}]},
+  {label:'Ace Pilot!', words:[
+    {w:'ROCKET',e:'🚀'},{w:'PENGUIN',e:'🐧'},{w:'RAINBOW',e:'🌈'},{w:'BALLOON',e:'🎈'}]},
 ];
+const HINTS_PER_WORD=2;
 
 const skyEl=document.getElementById('sky');
 const jetEl=document.getElementById('jet');
 const slotsEl=document.getElementById('slots');
 const tilesEl=document.getElementById('tiles');
 const actionEl=document.getElementById('action');
+const clueEl=document.getElementById('clue');
+const clueLabelEl=document.getElementById('clueLabel');
+const hintBtn=document.getElementById('hintBtn');
 const bannerEl=document.getElementById('banner');
 const bannerTitle=document.getElementById('bannerTitle');
 const bannerMsg=document.getElementById('bannerMsg');
@@ -142,7 +168,7 @@ const popEl=document.getElementById('popEl');
 const levelLabel=document.getElementById('levelLabel');
 
 let lvlIdx=0, wordIdx=0, score=0, pops=0;
-let word='', typed=0, mode='fly', locked=false;
+let word='', typed=0, mode='fly', locked=false, hintsLeft=HINTS_PER_WORD;
 const BALLOON_EMOJI=['🎈','🎈','🟡','🔴','🟢','🟣'];
 
 function rnd(n){return Math.floor(Math.random()*n);}
@@ -162,11 +188,16 @@ function spawnClouds(){
 
 /* ---- Build the word to spell ---- */
 function startWord(){
-  word=LEVELS[lvlIdx].words[wordIdx];
+  const wObj=LEVELS[lvlIdx].words[wordIdx];
+  word=wObj.w;
   typed=0;
+  hintsLeft=HINTS_PER_WORD;
+  clueEl.textContent=wObj.e;
   actionEl.textContent = mode==='fly' ? '✈️ Spell to FLY!' : '💥 Spell to SHOOT!';
+  clueLabelEl.textContent='What is this? Spell it!';
   buildSlots();
   buildTiles();
+  updateHintBtn();
 }
 
 function buildSlots(){
@@ -184,8 +215,7 @@ function buildTiles(){
   let letters=word.split('');
   const extras='ABCDEFGHIJKLMNOPRSTUW';
   while(letters.length<word.length+2){
-    const L=extras[rnd(extras.length)];
-    letters.push(L);
+    letters.push(extras[rnd(extras.length)]);
   }
   for(let i=letters.length-1;i>0;i--){const j=rnd(i+1);[letters[i],letters[j]]=[letters[j],letters[i]];}
   letters.forEach(L=>{
@@ -193,19 +223,24 @@ function buildTiles(){
     b.className='tile';
     b.textContent=L;
     b.dataset.letter=L;
-    b.onclick=()=>tryLetter(L,b);
+    b.onclick=()=>tryLetter(L,b,false);
     tilesEl.appendChild(b);
   });
 }
 
+function updateHintBtn(){
+  hintBtn.textContent=`💡 Hint (${hintsLeft})`;
+  hintBtn.disabled = locked || hintsLeft<=0;
+}
+
 /* ---- Handle a letter guess ---- */
-function tryLetter(L,btn){
+function tryLetter(L,btn,fromHint){
   if(locked) return;
   if(L===word[typed]){
     const slot=slotsEl.children[typed];
     slot.textContent=L;
     slot.classList.remove('next');
-    slot.classList.add('done');
+    slot.classList.add(fromHint?'hinted':'done');
     if(btn) btn.classList.add('used');
     typed++;
     if(typed<word.length){
@@ -214,7 +249,6 @@ function tryLetter(L,btn){
       finishWord();
     }
   } else {
-    // find a matching wrong tile to shake (the one clicked, or any keyboard feedback)
     const target=btn || [...tilesEl.children].find(t=>t.dataset.letter===L && !t.classList.contains('used'));
     if(target){
       target.classList.add('shake');
@@ -223,10 +257,23 @@ function tryLetter(L,btn){
   }
 }
 
+/* ---- Hint: reveal the next letter for you ---- */
+function useHint(){
+  if(locked || hintsLeft<=0 || typed>=word.length) return;
+  const need=word[typed];
+  const tile=[...tilesEl.children].find(t=>t.dataset.letter===need && !t.classList.contains('used'));
+  hintsLeft--;
+  tryLetter(need,tile,true);
+  updateHintBtn();
+}
+hintBtn.onclick=useHint;
+
 /* ---- Word complete → do the action ---- */
 function finishWord(){
   locked=true;
+  updateHintBtn();
   score++; scoreEl.textContent=score;
+  clueLabelEl.textContent='✅ '+word+'!';
   if(mode==='fly'){
     flyJet();
     mode='shoot';
@@ -242,7 +289,7 @@ function finishWord(){
     } else {
       startWord();
     }
-  }, mode==='shoot' ? 1500 : 1500); // wait for the action to play
+  }, 1500);
 }
 
 /* ---- FLY: jet zooms upward then settles ---- */
@@ -252,7 +299,6 @@ function flyJet(){
   jetEl.style.bottom=up+'px';
   jetEl.style.left=(46+30+rnd(30))+'px';
   setTimeout(()=>jetEl.classList.remove('wobble'),500);
-  // trail puffs
   for(let i=0;i<4;i++){
     setTimeout(()=>{
       const p=document.createElement('div');
@@ -268,7 +314,6 @@ function flyJet(){
 
 /* ---- SHOOT: bullet flies up, spawn a balloon to hit ---- */
 function shootBullet(){
-  // spawn a balloon target near the top
   const balloon=document.createElement('div');
   balloon.className='balloon';
   balloon.textContent=BALLOON_EMOJI[rnd(BALLOON_EMOJI.length)];
@@ -290,7 +335,6 @@ function shootBullet(){
   bullet.style.top=startY+'px';
   skyEl.appendChild(bullet);
 
-  // animate bullet toward the balloon
   const targetX=bx+8, targetY=by+8;
   const steps=18;let step=0;
   const dx=(targetX-startX)/steps, dy=(targetY-startY)/steps;
@@ -301,7 +345,6 @@ function shootBullet(){
     if(step>=steps){
       clearInterval(timer);
       bullet.remove();
-      // BOOM the balloon
       const boom=document.createElement('div');
       boom.className='boom';boom.textContent='💥';
       boom.style.left=bx+'px';boom.style.top=by+'px';
@@ -321,6 +364,7 @@ function winLevel(){
     ? `Amazing! You spelled ${score} words and popped ${pops} balloons!`
     : `Great flying! On to the next runway...`;
   nextBtn.textContent = last ? 'Play Again' : 'Next Level →';
+  hintBtn.disabled=true;
   bannerEl.classList.remove('hidden');
 }
 
@@ -343,7 +387,7 @@ window.addEventListener('keydown',e=>{
   const k=e.key.toUpperCase();
   if(k.length===1 && k>='A' && k<='Z'){
     const btn=[...tilesEl.children].find(t=>t.dataset.letter===k && !t.classList.contains('used'));
-    tryLetter(k,btn);
+    tryLetter(k,btn,false);
   }
 });
 
