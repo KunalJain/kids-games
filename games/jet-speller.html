@@ -24,13 +24,12 @@
 
   #jet{
     position:absolute;left:46px;bottom:26px;font-size:52px;
-    transition:bottom 0.6s cubic-bezier(.34,1.56,.5,1), left 0.6s ease;
+    transition:bottom 0.7s cubic-bezier(.34,1.4,.5,1), left 0.7s ease;
     filter:drop-shadow(0 6px 8px rgba(0,0,0,0.35));
-    transform:scaleX(-1);
   }
-  #jet.wobble{animation:wobble 0.5s;}
-  @keyframes wobble{
-    0%,100%{rotate:0deg;}25%{rotate:-12deg;}75%{rotate:12deg;}
+  #jet.climb{animation:climb 0.7s ease;}
+  @keyframes climb{
+    0%{rotate:0deg;}40%{rotate:-16deg;}100%{rotate:0deg;}
   }
 
   .bullet{position:absolute;font-size:22px;pointer-events:none;}
@@ -167,6 +166,7 @@ const levelLabel=document.getElementById('levelLabel');
 
 let lvlIdx=0, wordIdx=0, score=0, pops=0;
 let word='', typed=0, mode='fly', locked=false, hintsLeft=HINTS_PER_WORD;
+let jetBottom=26, jetLeft=46;
 const BALLOON_EMOJI=['🎈','🎈','🟡','🔴','🟢','🟣'];
 
 function rnd(n){return Math.floor(Math.random()*n);}
@@ -290,13 +290,15 @@ function finishWord(){
   }, 1500);
 }
 
-/* ---- FLY: jet zooms upward then settles ---- */
+/* ---- FLY: jet climbs up and to the right, like a takeoff ---- */
 function flyJet(){
-  jetEl.classList.add('wobble');
-  const up=120+rnd(60);
-  jetEl.style.bottom=up+'px';
-  jetEl.style.left=(46+30+rnd(30))+'px';
-  setTimeout(()=>jetEl.classList.remove('wobble'),500);
+  jetEl.classList.remove('climb'); void jetEl.offsetWidth; // restart animation
+  jetEl.classList.add('climb');
+  jetBottom=Math.min(jetBottom+44, 200);
+  jetLeft=Math.min(jetLeft+50, 240);
+  jetEl.style.bottom=jetBottom+'px';
+  jetEl.style.left=jetLeft+'px';
+  setTimeout(()=>jetEl.classList.remove('climb'),700);
   for(let i=0;i<4;i++){
     setTimeout(()=>{
       const p=document.createElement('div');
@@ -374,6 +376,7 @@ nextBtn.onclick=()=>{
     lvlIdx++;
   }
   wordIdx=0; mode='fly';
+  jetBottom=26; jetLeft=46;
   jetEl.style.bottom='26px'; jetEl.style.left='46px';
   lvlEl.textContent=lvlIdx+1;
   levelLabel.textContent=LEVELS[lvlIdx].label;
