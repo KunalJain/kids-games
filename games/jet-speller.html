@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jet Speller</title>
+<link rel="stylesheet" href="../style.css">
+<style>
+  body{display:flex;flex-direction:column;align-items:center;}
+  #wrap{width:min(620px,97vw);padding:0 8px 24px;}
+  #ui{display:flex;gap:12px;font-size:15px;font-weight:600;padding:0.3rem 0 0.7rem;align-items:center;flex-wrap:wrap;justify-content:center;}
+  #ui .pill{background:rgba(255,255,255,0.07);padding:6px 12px;border-radius:999px;}
+  #levelLabel{color:#4FC3F7;font-weight:700;}
+
+  /* Sky scene */
+  #sky{
+    position:relative;height:300px;border-radius:22px;overflow:hidden;
+    background:linear-gradient(180deg,#1a2a6c 0%,#2E6CC4 45%,#7EC8F0 100%);
+    box-shadow:inset 0 -20px 40px rgba(0,0,0,0.25);
+  }
+  .cloud{position:absolute;font-size:34px;opacity:0.85;pointer-events:none;
+    animation:drift linear infinite;}
+  @keyframes drift{from{transform:translateX(640px);}to{transform:translateX(-80px);}}
+
+  #jet{
+    position:absolute;left:46px;bottom:26px;font-size:52px;
+    transition:bottom 0.6s cubic-bezier(.34,1.56,.5,1), left 0.6s ease;
+    filter:drop-shadow(0 6px 8px rgba(0,0,0,0.35));
+    transform:scaleX(-1);
+  }
+  #jet.wobble{animation:wobble 0.5s;}
+  @keyframes wobble{
+    0%,100%{rotate:0deg;}25%{rotate:-12deg;}75%{rotate:12deg;}
+  }
+
+  .bullet{position:absolute;font-size:22px;pointer-events:none;}
+  .balloon{position:absolute;font-size:38px;pointer-events:none;
+    filter:drop-shadow(0 3px 4px rgba(0,0,0,0.25));}
+  .boom{position:absolute;font-size:40px;pointer-events:none;animation:boom 0.5s ease-out forwards;}
+  @keyframes boom{0%{transform:scale(0.4);opacity:1;}100%{transform:scale(1.6);opacity:0;}}
+
+  /* Word to spell */
+  #wordCard{
+    background:linear-gradient(135deg,rgba(79,195,247,0.15),rgba(41,108,196,0.15));
+    border:1px solid rgba(79,195,247,0.3);
+    border-radius:18px;padding:18px 12px;margin:16px 0 12px;text-align:center;
+  }
+  #action{font-size:14px;color:#4FC3F7;font-weight:700;letter-spacing:1px;margin-bottom:12px;text-transform:uppercase;}
+  #slots{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;}
+  .slot{
+    width:44px;height:54px;border-radius:12px;
+    background:rgba(255,255,255,0.05);
+    border:2px solid rgba(255,255,255,0.15);
+    display:flex;align-items:center;justify-content:center;
+    font-size:28px;font-weight:800;color:#fff;
+  }
+  .slot.next{border-color:#FFD54F;box-shadow:0 0 16px rgba(255,213,79,0.5);}
+  .slot.done{background:linear-gradient(140deg,#29B6F6,#1976D2);border-color:#81D4FA;animation:pop 0.3s;}
+  @keyframes pop{50%{transform:scale(1.15);}}
+
+  /* Letter tiles */
+  #tiles{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;}
+  .tile{
+    width:52px;height:52px;font-size:24px;font-weight:800;
+    background:rgba(255,255,255,0.08);
+    border:2px solid rgba(255,255,255,0.18);
+    border-radius:12px;color:#fff;cursor:pointer;
+    font-family:inherit;transition:transform 0.1s,background 0.15s;
+  }
+  .tile:hover:not(:disabled){background:rgba(79,195,247,0.2);border-color:#4FC3F7;}
+  .tile:active:not(:disabled){transform:scale(0.9);}
+  .tile.used{opacity:0.25;pointer-events:none;}
+  .tile.shake{animation:shake 0.35s;border-color:#FF6B6B;}
+  @keyframes shake{0%,100%{transform:translateX(0);}25%{transform:translateX(-6px);}75%{transform:translateX(6px);}}
+
+  #banner{
+    text-align:center;padding:22px 16px;
+    background:linear-gradient(135deg,#29B6F6,#1976D2);
+    border-radius:18px;margin:14px 0;
+    box-shadow:0 0 30px rgba(41,182,246,0.5);
+    animation:popIn 0.5s cubic-bezier(.5,1.7,.5,1);
+  }
+  #banner h2{font-size:26px;margin-bottom:6px;}
+  #banner p{color:rgba(255,255,255,0.9);margin-bottom:14px;}
+  #banner button{
+    padding:12px 28px;font-size:16px;font-weight:700;
+    background:#fff;color:#1976D2;border:none;border-radius:12px;cursor:pointer;font-family:inherit;
+  }
+  #banner button:hover{background:#B3E5FC;}
+  @keyframes popIn{0%{transform:scale(0.7);opacity:0;}100%{transform:scale(1);opacity:1;}}
+  .hidden{display:none!important;}
+</style>
+</head>
+<body>
+<div class="game-header">
+  <a href="../index.html" class="back-btn">← Back</a>
+  <h1>✈️ Jet Speller</h1>
+</div>
+<div id="wrap">
+  <div id="ui">
+    <span class="pill">✈️ <span id="lvlEl">1</span> · <span id="levelLabel">Take Off!</span></span>
+    <span class="pill">⭐ <span id="scoreEl">0</span></span>
+    <span class="pill">🎈 <span id="popEl">0</span></span>
+  </div>
+
+  <div id="sky"><div id="jet">✈️</div></div>
+
+  <div id="wordCard">
+    <div id="action">✈️ Spell to FLY!</div>
+    <div id="slots"></div>
+  </div>
+
+  <div id="tiles"></div>
+
+  <div id="banner" class="hidden">
+    <h2 id="bannerTitle">🎉 Level Clear! 🎉</h2>
+    <p id="bannerMsg">Great flying!</p>
+    <button id="nextBtn">Next Level →</button>
+  </div>
+</div>
+
+<script>
+const LEVELS=[
+  {label:'Take Off!',  words:['CAT','SUN','JET','FLY','SKY']},
+  {label:'Up We Go!',  words:['STAR','ZOOM','WING','FAST','BLUE']},
+  {label:'Sky High!',  words:['CLOUD','ROCKET','FLYING','PILOT']},
+  {label:'Ace Pilot!', words:['ROCKET','BALLOON','JETPACK','RUNWAY']},
+];
+
+const skyEl=document.getElementById('sky');
+const jetEl=document.getElementById('jet');
+const slotsEl=document.getElementById('slots');
+const tilesEl=document.getElementById('tiles');
+const actionEl=document.getElementById('action');
+const bannerEl=document.getElementById('banner');
+const bannerTitle=document.getElementById('bannerTitle');
+const bannerMsg=document.getElementById('bannerMsg');
+const nextBtn=document.getElementById('nextBtn');
+const lvlEl=document.getElementById('lvlEl');
+const scoreEl=document.getElementById('scoreEl');
+const popEl=document.getElementById('popEl');
+const levelLabel=document.getElementById('levelLabel');
+
+let lvlIdx=0, wordIdx=0, score=0, pops=0;
+let word='', typed=0, mode='fly', locked=false;
+const BALLOON_EMOJI=['🎈','🎈','🟡','🔴','🟢','🟣'];
+
+function rnd(n){return Math.floor(Math.random()*n);}
+
+/* ---- Clouds drifting in the sky ---- */
+function spawnClouds(){
+  for(let i=0;i<3;i++){
+    const c=document.createElement('div');
+    c.className='cloud';
+    c.textContent='☁️';
+    c.style.top=(15+i*70)+'px';
+    c.style.animationDuration=(14+i*6)+'s';
+    c.style.animationDelay=(-i*5)+'s';
+    skyEl.appendChild(c);
+  }
+}
+
+/* ---- Build the word to spell ---- */
+function startWord(){
+  word=LEVELS[lvlIdx].words[wordIdx];
+  typed=0;
+  actionEl.textContent = mode==='fly' ? '✈️ Spell to FLY!' : '💥 Spell to SHOOT!';
+  buildSlots();
+  buildTiles();
+}
+
+function buildSlots(){
+  slotsEl.innerHTML='';
+  for(let i=0;i<word.length;i++){
+    const s=document.createElement('div');
+    s.className='slot'+(i===0?' next':'');
+    slotsEl.appendChild(s);
+  }
+}
+
+function buildTiles(){
+  tilesEl.innerHTML='';
+  // letters of the word + 2 random extra letters, shuffled
+  let letters=word.split('');
+  const extras='ABCDEFGHIJKLMNOPRSTUW';
+  while(letters.length<word.length+2){
+    const L=extras[rnd(extras.length)];
+    letters.push(L);
+  }
+  for(let i=letters.length-1;i>0;i--){const j=rnd(i+1);[letters[i],letters[j]]=[letters[j],letters[i]];}
+  letters.forEach(L=>{
+    const b=document.createElement('button');
+    b.className='tile';
+    b.textContent=L;
+    b.dataset.letter=L;
+    b.onclick=()=>tryLetter(L,b);
+    tilesEl.appendChild(b);
+  });
+}
+
+/* ---- Handle a letter guess ---- */
+function tryLetter(L,btn){
+  if(locked) return;
+  if(L===word[typed]){
+    const slot=slotsEl.children[typed];
+    slot.textContent=L;
+    slot.classList.remove('next');
+    slot.classList.add('done');
+    if(btn) btn.classList.add('used');
+    typed++;
+    if(typed<word.length){
+      slotsEl.children[typed].classList.add('next');
+    } else {
+      finishWord();
+    }
+  } else {
+    // find a matching wrong tile to shake (the one clicked, or any keyboard feedback)
+    const target=btn || [...tilesEl.children].find(t=>t.dataset.letter===L && !t.classList.contains('used'));
+    if(target){
+      target.classList.add('shake');
+      setTimeout(()=>target.classList.remove('shake'),350);
+    }
+  }
+}
+
+/* ---- Word complete → do the action ---- */
+function finishWord(){
+  locked=true;
+  score++; scoreEl.textContent=score;
+  if(mode==='fly'){
+    flyJet();
+    mode='shoot';
+  } else {
+    shootBullet();
+    mode='fly';
+  }
+  setTimeout(()=>{
+    wordIdx++;
+    locked=false;
+    if(wordIdx>=LEVELS[lvlIdx].words.length){
+      winLevel();
+    } else {
+      startWord();
+    }
+  }, mode==='shoot' ? 1500 : 1500); // wait for the action to play
+}
+
+/* ---- FLY: jet zooms upward then settles ---- */
+function flyJet(){
+  jetEl.classList.add('wobble');
+  const up=120+rnd(60);
+  jetEl.style.bottom=up+'px';
+  jetEl.style.left=(46+30+rnd(30))+'px';
+  setTimeout(()=>jetEl.classList.remove('wobble'),500);
+  // trail puffs
+  for(let i=0;i<4;i++){
+    setTimeout(()=>{
+      const p=document.createElement('div');
+      p.className='boom';p.textContent='💨';
+      const r=jetEl.getBoundingClientRect();const sr=skyEl.getBoundingClientRect();
+      p.style.left=(r.left-sr.left)+'px';
+      p.style.top=(r.top-sr.top+20)+'px';
+      skyEl.appendChild(p);
+      setTimeout(()=>p.remove(),500);
+    },i*120);
+  }
+}
+
+/* ---- SHOOT: bullet flies up, spawn a balloon to hit ---- */
+function shootBullet(){
+  // spawn a balloon target near the top
+  const balloon=document.createElement('div');
+  balloon.className='balloon';
+  balloon.textContent=BALLOON_EMOJI[rnd(BALLOON_EMOJI.length)];
+  const bx=140+rnd(skyEl.clientWidth-220);
+  const by=20+rnd(60);
+  balloon.style.left=bx+'px';
+  balloon.style.top=by+'px';
+  skyEl.appendChild(balloon);
+
+  const jr=jetEl.getBoundingClientRect();
+  const sr=skyEl.getBoundingClientRect();
+  const startX=jr.left-sr.left+jr.width-6;
+  const startY=jr.top-sr.top+6;
+
+  const bullet=document.createElement('div');
+  bullet.className='bullet';
+  bullet.textContent='⚡';
+  bullet.style.left=startX+'px';
+  bullet.style.top=startY+'px';
+  skyEl.appendChild(bullet);
+
+  // animate bullet toward the balloon
+  const targetX=bx+8, targetY=by+8;
+  const steps=18;let step=0;
+  const dx=(targetX-startX)/steps, dy=(targetY-startY)/steps;
+  const timer=setInterval(()=>{
+    step++;
+    bullet.style.left=(startX+dx*step)+'px';
+    bullet.style.top=(startY+dy*step)+'px';
+    if(step>=steps){
+      clearInterval(timer);
+      bullet.remove();
+      // BOOM the balloon
+      const boom=document.createElement('div');
+      boom.className='boom';boom.textContent='💥';
+      boom.style.left=bx+'px';boom.style.top=by+'px';
+      skyEl.appendChild(boom);
+      balloon.remove();
+      setTimeout(()=>boom.remove(),500);
+      pops++; popEl.textContent=pops;
+    }
+  },40);
+}
+
+/* ---- Level win ---- */
+function winLevel(){
+  const last=lvlIdx===LEVELS.length-1;
+  bannerTitle.textContent = last ? '🏆 Ace Pilot! 🏆' : '🎉 Level Clear! 🎉';
+  bannerMsg.textContent = last
+    ? `Amazing! You spelled ${score} words and popped ${pops} balloons!`
+    : `Great flying! On to the next runway...`;
+  nextBtn.textContent = last ? 'Play Again' : 'Next Level →';
+  bannerEl.classList.remove('hidden');
+}
+
+nextBtn.onclick=()=>{
+  bannerEl.classList.add('hidden');
+  if(lvlIdx===LEVELS.length-1){
+    lvlIdx=0; score=0; pops=0; scoreEl.textContent=0; popEl.textContent=0;
+  } else {
+    lvlIdx++;
+  }
+  wordIdx=0; mode='fly';
+  jetEl.style.bottom='26px'; jetEl.style.left='46px';
+  lvlEl.textContent=lvlIdx+1;
+  levelLabel.textContent=LEVELS[lvlIdx].label;
+  startWord();
+};
+
+/* ---- Physical keyboard support ---- */
+window.addEventListener('keydown',e=>{
+  const k=e.key.toUpperCase();
+  if(k.length===1 && k>='A' && k<='Z'){
+    const btn=[...tilesEl.children].find(t=>t.dataset.letter===k && !t.classList.contains('used'));
+    tryLetter(k,btn);
+  }
+});
+
+spawnClouds();
+levelLabel.textContent=LEVELS[0].label;
+startWord();
+</script>
+</body>
+</html>

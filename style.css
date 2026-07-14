@@ -132,6 +132,16 @@ a { text-decoration: none; color: inherit; }
 .card-wizard  .play-btn { background: #E91E63; color: #fff; }
 .card-wizard  .badge    { background: rgba(233,30,99,0.2); color: #F8BBD0; }
 
+/* Jet Speller — sky blue */
+.card-jet     { border-color: rgba(41,182,246,0.4); }
+.card-jet     .play-btn { background: #29B6F6; color: #002a3a; }
+.card-jet     .badge    { background: rgba(41,182,246,0.2); color: #81D4FA; }
+
+/* Chess — wood/marble */
+.card-chess   { border-color: rgba(181,136,99,0.5); }
+.card-chess   .play-btn { background: #B58863; color: #fff; }
+.card-chess   .badge    { background: rgba(181,136,99,0.25); color: #F0D9B5; }
+
 /* ── In-game back button ── */
 .back-btn {
   display: inline-flex;
