@@ -10,6 +10,8 @@
   #wrap{width:min(620px,97vw);padding:0 8px 24px;}
   #ui{display:flex;gap:12px;font-size:15px;font-weight:600;padding:0.3rem 0 0.7rem;align-items:center;flex-wrap:wrap;justify-content:center;}
   #ui .pill{background:rgba(255,255,255,0.07);padding:6px 12px;border-radius:999px;}
+  #ui button.pill{border:none;color:#fff;cursor:pointer;font:inherit;transition:background 0.15s;}
+  #ui button.pill:hover{background:rgba(255,255,255,0.14);}
   #levelLabel{color:#4FC3F7;font-weight:700;}
 
   /* Sky scene */
@@ -115,6 +117,7 @@
     <span class="pill">✈️ <span id="lvlEl">1</span> · <span id="levelLabel">Take Off!</span></span>
     <span class="pill">⭐ <span id="scoreEl">0</span></span>
     <span class="pill">🎈 <span id="popEl">0</span></span>
+    <button id="soundBtn" class="pill" title="Sound on/off">🔊</button>
   </div>
 
   <div id="sky"><div id="jet">✈️</div></div>
@@ -170,6 +173,58 @@ let jetBottom=26, jetLeft=46;
 const BALLOON_EMOJI=['🎈','🎈','🟡','🔴','🟢','🟣'];
 
 function rnd(n){return Math.floor(Math.random()*n);}
+
+/* ---- Sound effects (synthesized, no files needed) ---- */
+let audioCtx=null, soundOn=true;
+const soundBtn=document.getElementById('soundBtn');
+
+function initAudio(){
+  if(!audioCtx){
+    try{ audioCtx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return; }
+  }
+  if(audioCtx.state==='suspended') audioCtx.resume();
+}
+
+function beep(freq,dur,type='sine',vol=0.2,slideTo=null,delay=0){
+  if(!soundOn||!audioCtx) return;
+  const t=audioCtx.currentTime+delay;
+  const osc=audioCtx.createOscillator();
+  const g=audioCtx.createGain();
+  osc.type=type;
+  osc.frequency.setValueAtTime(freq,t);
+  if(slideTo) osc.frequency.exponentialRampToValueAtTime(slideTo,t+dur);
+  g.gain.setValueAtTime(vol,t);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  osc.connect(g); g.connect(audioCtx.destination);
+  osc.start(t); osc.stop(t+dur+0.02);
+}
+
+const SFX={
+  letter(){ beep(680,0.08,'square',0.10,980); },
+  wrong(){ beep(200,0.2,'sawtooth',0.14,120); },
+  word(){ [523,659,784].forEach((f,i)=>beep(f,0.16,'triangle',0.16,null,i*0.09)); },
+  fly(){ beep(320,0.55,'sine',0.18,880); },
+  shoot(){ beep(900,0.14,'square',0.16,220); beep(1050,0.14,'square',0.16,240,0.13); },
+  pop(){
+    if(!soundOn||!audioCtx) return;
+    const t=audioCtx.currentTime;
+    const len=Math.floor(audioCtx.sampleRate*0.12);
+    const buffer=audioCtx.createBuffer(1,len,audioCtx.sampleRate);
+    const data=buffer.getChannelData(0);
+    for(let i=0;i<len;i++) data[i]=(Math.random()*2-1)*Math.pow(1-i/len,2);
+    const src=audioCtx.createBufferSource(); src.buffer=buffer;
+    const g=audioCtx.createGain(); g.gain.value=0.25;
+    src.connect(g); g.connect(audioCtx.destination); src.start(t);
+    beep(520,0.1,'sine',0.12,170);
+  },
+  win(){ [523,659,784,1047].forEach((f,i)=>beep(f,0.24,'triangle',0.18,null,i*0.13)); },
+};
+
+soundBtn.onclick=()=>{
+  soundOn=!soundOn;
+  soundBtn.textContent=soundOn?'🔊':'🔇';
+  if(soundOn){ initAudio(); beep(660,0.1,'triangle',0.15); }
+};
 
 /* ---- Clouds drifting in the sky ---- */
 function spawnClouds(){
@@ -234,6 +289,7 @@ function updateHintBtn(){
 /* ---- Handle a letter guess ---- */
 function tryLetter(L,btn,fromHint){
   if(locked) return;
+  initAudio();
   if(L===word[typed]){
     const slot=slotsEl.children[typed];
     slot.textContent=L;
@@ -243,10 +299,12 @@ function tryLetter(L,btn,fromHint){
     typed++;
     if(typed<word.length){
       slotsEl.children[typed].classList.add('next');
+      SFX.letter();
     } else {
       finishWord();
     }
   } else {
+    SFX.wrong();
     const target=btn || [...tilesEl.children].find(t=>t.dataset.letter===L && !t.classList.contains('used'));
     if(target){
       target.classList.add('shake');
@@ -272,6 +330,7 @@ function finishWord(){
   updateHintBtn();
   score++; scoreEl.textContent=score;
   clueLabelEl.textContent='✅ '+word+'!';
+  SFX.word();
   if(mode==='fly'){
     flyJet();
     mode='shoot';
@@ -292,6 +351,7 @@ function finishWord(){
 
 /* ---- FLY: jet climbs up and to the right, like a takeoff ---- */
 function flyJet(){
+  SFX.fly();
   jetEl.classList.remove('climb'); void jetEl.offsetWidth; // restart animation
   jetEl.classList.add('climb');
   jetBottom=Math.min(jetBottom+44, 200);
@@ -314,6 +374,7 @@ function flyJet(){
 
 /* ---- SHOOT: bullet flies up, spawn a balloon to hit ---- */
 function shootBullet(){
+  SFX.shoot();
   const balloon=document.createElement('div');
   balloon.className='balloon';
   balloon.textContent=BALLOON_EMOJI[rnd(BALLOON_EMOJI.length)];
@@ -351,6 +412,7 @@ function shootBullet(){
       skyEl.appendChild(boom);
       balloon.remove();
       setTimeout(()=>boom.remove(),500);
+      SFX.pop();
       pops++; popEl.textContent=pops;
     }
   },40);
@@ -365,10 +427,12 @@ function winLevel(){
     : `Great flying! On to the next runway...`;
   nextBtn.textContent = last ? 'Play Again' : 'Next Level →';
   hintBtn.disabled=true;
+  SFX.win();
   bannerEl.classList.remove('hidden');
 }
 
 nextBtn.onclick=()=>{
+  initAudio();
   bannerEl.classList.add('hidden');
   if(lvlIdx===LEVELS.length-1){
     lvlIdx=0; score=0; pops=0; scoreEl.textContent=0; popEl.textContent=0;
